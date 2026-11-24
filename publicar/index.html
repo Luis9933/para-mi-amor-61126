@@ -1,0 +1,3544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Me gustas</title>
+
+    <!-- Letras cursivas y tiernas. Necesitan internet; si no cargan, el navegador usa una cursiva suya -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Dancing+Script:wght@600;700&family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --letra-carta: 'Caveat', 'Segoe Print', 'Bradley Hand', 'Dancing Script', cursive;
+        }
+        body { margin: 0; overflow: hidden; touch-action: none; }
+        canvas { display: block; }
+
+        /* capas (z-index):  canvas = 0  <  pareja = 2  <  snoopy.gif = 3  <  tarjetas = 10  <  botón = 11 */
+        #snoopy {
+            position: fixed;
+            bottom: 16%;      /* queda encima de la barra negra de abajo */
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(clamp(110px, 19vh, 160px), 45vw);   /* se adapta a pantallas bajitas y a celulares */
+            opacity: 0;
+            transition: opacity 1s;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        /* La imagen de la pareja, al pie del árbol. El JS le pone el ancho y la posición */
+        #pareja {
+            position: fixed;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 1.4s;
+            pointer-events: none;   /* los clics la atraviesan y llegan al canvas */
+            z-index: 2;
+        }
+
+        /* ---------- Tarjetas en forma de corazón (globos) ---------- */
+        /* El JS les pone el ancho (--cw), la posición y el giro en cada cuadro */
+        .carta {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: var(--cw, 300px);
+            height: calc(var(--cw, 300px) * 1.1);
+            transform-origin: 50% 44.5%;    /* el giro es alrededor del centro del corazón */
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10;
+            will-change: transform, opacity;
+        }
+        .carta svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+            filter: drop-shadow(0 10px 12px rgba(190, 70, 110, 0.28));   /* sombra suave */
+        }
+        .carta-texto {
+            position: absolute;
+            left: 21%;
+            top: 22.7%;
+            width: 58%;
+            height: 34%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            opacity: 0;
+            font-family: var(--letra-carta);
+            font-weight: 700;
+            line-height: 1.1;
+            color: #7a2a47;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+        }
+        .carta-texto span { display: block; max-width: 100%; }
+
+        /* ---------- Botón para pasar a la siguiente tarjeta ---------- */
+        .btn-sig {
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 11;
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, 10px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            font-family: var(--letra-carta);
+            font-weight: 700;
+            font-size: 22px;
+            color: #8a2f4f;
+            padding: 8px 24px 9px;
+            border-radius: 999px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            background: linear-gradient(180deg, #ffe3ec, #ffbfd2);
+            box-shadow: 0 6px 16px rgba(200, 70, 110, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-sig.visible { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+        .btn-sig.visible:hover { filter: brightness(1.04); }
+        .btn-sig.visible:active { transform: translate(-50%, 0) scale(0.96); }
+    
+        :root {
+            --letra-b: 'Dancing Script', 'Segoe Script', 'Snell Roundhand', 'Brush Script MT', cursive;
+        }
+
+        /* La invitación: la pregunta y el botón van encima del corazón grande (que se dibuja en el canvas) */
+        #invitacion {
+            position: fixed;
+            top: 0; right: 0; bottom: 0; left: 0;
+            z-index: 5;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease;
+        }
+        #invitacion.visible { opacity: 1; }
+
+        #pregunta {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+            font-family: var(--letra-b);
+            font-weight: 700;
+            line-height: 1.05;
+            text-shadow: 0 2px 8px rgba(140, 20, 60, 0.35);
+        }
+        #pregunta span { display: block; max-width: 100%; }
+
+        #btnOk {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            font-family: var(--letra-b);
+            font-weight: 700;
+            color: #e8416f;
+            padding: 0.2em 1.2em 0.28em;
+            border-radius: 999px;
+            border: 2px solid rgba(255, 255, 255, 0.95);
+            background: linear-gradient(180deg, #fffdf8, #ffe3ec);
+            box-shadow: 0 6px 16px rgba(150, 20, 60, 0.35), inset 0 1px 0 #fff;
+            cursor: pointer;
+            pointer-events: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.15s ease;
+        }
+        #invitacion.visible #btnOk { pointer-events: auto; }
+        #btnOk:focus { outline: none; }
+        #btnOk:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 6px 16px rgba(150, 20, 60, 0.35); }
+        #btnOk:hover { transform: translate(-50%, -50%) scale(1.05); }
+        #btnOk:active { transform: translate(-50%, -50%) scale(0.96); }
+
+        /* La cortina rosa con la que se pasa a la animación */
+        #cortina {
+            position: fixed;
+            top: 0; right: 0; bottom: 0; left: 0;
+            background: #ff5c86;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            z-index: 200;
+        }
+    
+        #bienvenida { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 50; background: #cfeaff; touch-action: none; }
+        #bienvenida canvas { width: 100%; height: 100%; }
+
+        /* Cuando terminan las tarjetas, Snoopy y Fifi laten y se pueden tocar */
+        #pareja.activa { pointer-events: auto; cursor: pointer; filter: drop-shadow(0 0 12px rgba(255, 90, 140, 0.7)); animation: latePareja 1.8s ease-in-out infinite; }
+        @keyframes latePareja {
+            0%, 100% { transform: translateX(-50%) scale(1); }
+            50%      { transform: translateX(-50%) scale(1.04); }
+        }
+        #pistaFinal {
+            position: fixed;
+            transform: translate(-50%, -100%);
+            font-family: var(--letra-carta);
+            font-weight: 700;
+            font-size: clamp(20px, 3.2vh, 28px);
+            color: #fff;
+            background: rgba(232, 65, 111, 0.92);
+            padding: 0.1em 0.8em 0.18em;
+            border-radius: 999px;
+            box-shadow: 0 4px 12px rgba(150, 20, 60, 0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s;
+            z-index: 4;
+        }
+        #pistaFinal.visible { opacity: 1; animation: flota 1.8s ease-in-out infinite; }
+        @keyframes flota { 0%, 100% { transform: translate(-50%, -100%); } 50% { transform: translate(-50%, calc(-100% - 8px)); } }
+
+        /* FINAL: imagen en el cielo + mensaje que se desplaza */
+        #final { position: absolute; top: 0; right: 0; bottom: 0; left: 0; opacity: 0; pointer-events: none; transition: opacity 1.2s ease; }
+        #final.visible { opacity: 1; pointer-events: auto; }
+        #besoImg {
+            position: absolute; left: 50%; top: 3.5vh;
+            transform: translateX(-50%);
+            max-height: 38vh; max-width: min(78vw, 520px); width: auto; height: auto;
+            filter: drop-shadow(0 8px 14px rgba(120, 60, 90, 0.25));
+            animation: flotaBeso 4.5s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes flotaBeso { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-10px); } }
+        #panelMsg {
+            position: absolute; left: 50%; bottom: 3.5vh; transform: translateX(-50%);
+            width: min(92vw, 760px); height: 43vh;
+            border-radius: 26px;
+            background: rgba(255, 255, 255, 0.93);       /* sin desenfoque de fondo: era costoso con el cielo en movimiento */
+            box-shadow: 0 10px 30px rgba(190, 50, 100, 0.25), inset 0 0 0 2px rgba(255, 255, 255, 0.9);
+            overflow: hidden;
+        }
+        #mensajeFinal {
+            height: 100%; overflow-y: auto; box-sizing: border-box;
+            padding: 8% 7%;
+            scrollbar-width: none;
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 88%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 88%, transparent 100%);
+            font-family: var(--letra-b);
+            font-weight: 600;
+            font-size: clamp(19px, 3.1vh, 27px);
+            line-height: 1.3;
+            color: #a8325e;
+            text-align: center;
+        }
+        #mensajeFinal::-webkit-scrollbar { display: none; }
+        #mensajeFinal p { margin: 0 0 1em; }
+        #mensajeFinal p.firma { font-size: 1.15em; color: #e8416f; margin-bottom: 2.2em; }
+
+        /* Botón de corazón "Empezar de nuevo", al final del mensaje */
+        #btnReiniciar {
+            display: block; position: relative;
+            width: clamp(115px, 19vh, 150px); aspect-ratio: 200 / 180;
+            margin: 0.4em auto 1.6em; padding: 0; border: 0; background: none;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+            filter: drop-shadow(0 6px 10px rgba(190, 40, 90, 0.4));
+            animation: lateBoton 1.6s ease-in-out infinite;
+        }
+        #btnReiniciar svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #btnReiniciar span {
+            position: absolute; top: 18%; left: 20%; right: 20%; bottom: 22%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: var(--letra-b); font-weight: 700; color: #fff;
+            font-size: clamp(17px, 2.9vh, 24px); line-height: 1.05;
+            text-shadow: 0 1px 4px rgba(140, 20, 60, 0.45);
+        }
+        #btnReiniciar:active { transform: scale(0.94); }
+        @keyframes lateBoton { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+
+        /* ============ PUERTA CON CONTRASEÑA ============ */
+        #puerta {
+            position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 300;
+            overflow: hidden; background: #ffe9ec;
+            transition: opacity 1.2s ease;
+        }
+        #puerta.saliendo { opacity: 0; pointer-events: none; }
+        #puertaFondo {
+            position: absolute; top: -6%; right: -6%; bottom: -6%; left: -6%;
+            background: url(contrasena.jpg) center / cover; filter: blur(26px) saturate(1.1);
+        }
+        #puertaCaja { position: absolute; font-family: 'Quicksand', 'Nunito', 'Trebuchet MS', system-ui, sans-serif; }
+        #puertaImg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+        #puertaCaja .el { position: absolute; box-sizing: border-box; }
+
+        #campoClave {
+            left: 21.27%; top: 53.10%; width: 57.86%; height: 7.52%;       /* justo sobre el campo dibujado */
+            display: flex; align-items: center;
+            border-radius: 999px; border: calc(var(--u) * 3) solid #f2e2d6;
+            background: linear-gradient(180deg, #fffdf8, #fff9ef);
+            box-shadow: inset 0 calc(var(--u) * 3) calc(var(--u) * 6) rgba(210, 160, 140, 0.18);
+        }
+        #campoClave.error { animation: sacude 0.45s; border-color: #f0a7a0; }
+        @keyframes sacude { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-9px); } 40% { transform: translateX(8px); }
+                            60% { transform: translateX(-6px); } 80% { transform: translateX(4px); } }
+        #campoClave svg.candado { flex: none; width: calc(var(--u) * 34); height: calc(var(--u) * 40); margin-left: calc(var(--u) * 30); }
+        #clave {
+            flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent;
+            padding: 0 calc(var(--u) * 14) 0 calc(var(--u) * 22);
+            font: 600 max(16px, calc(var(--u) * 34)) 'Quicksand', 'Nunito', system-ui, sans-serif;
+            color: #8b5e52; letter-spacing: 0.04em;
+        }
+        #clave::placeholder { color: #dcc3b8; letter-spacing: 0; }
+        #ojo {
+            flex: none; width: calc(var(--u) * 70); height: 100%; border: 0; background: none; cursor: pointer;
+            padding: 0; margin-right: calc(var(--u) * 14); display: flex; align-items: center; justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #ojo svg { width: calc(var(--u) * 40); height: calc(var(--u) * 40); }
+
+        #btnEntrar {
+            left: 37.40%; top: 64.29%; width: 25.60%; height: 7.52%; cursor: pointer; padding: 0 0 calc(var(--u) * 3);
+            border-radius: 999px; border: calc(var(--u) * 4) solid #e9c6b8;
+            background: linear-gradient(180deg, #fcc9b8, #f3a590);
+            box-shadow: 0 calc(var(--u) * 6) calc(var(--u) * 10) rgba(215, 120, 100, 0.35), inset 0 calc(var(--u) * 3) 0 rgba(255, 235, 225, 0.8);
+            color: #fff; font: 700 max(16px, calc(var(--u) * 38)) 'Quicksand', 'Nunito', system-ui, sans-serif;
+            text-shadow: 0 1px 3px rgba(190, 90, 70, 0.4); -webkit-tap-highlight-color: transparent;
+            transition: transform 0.15s, filter 0.2s;
+        }
+        #btnEntrar:hover { filter: brightness(1.05); transform: translateY(-2px); }
+        #btnEntrar:active { transform: scale(0.96); }
+        #btnEntrar:disabled { filter: grayscale(0.5) brightness(1.05); cursor: default; transform: none; }
+
+        #puertaMsg {
+            left: 21%; width: 58%; top: 73.6%; text-align: center; color: #b8584f; font-weight: 700;
+            font-size: max(13px, calc(var(--u) * 26)); line-height: 1.2; min-height: 1.3em;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #puertaMsg.visible { opacity: 1; }
+        #puertaMsg button { border: 0; background: none; color: #d96a7e; font: inherit; text-decoration: underline; cursor: pointer; padding: 0; }
+
+        /* el globo de diálogo de Snoopy */
+        #burbuja {
+            left: 27%; top: 79.5%; width: 37%; padding: calc(var(--u) * 20) calc(var(--u) * 26);
+            background: #fffaf3; border: calc(var(--u) * 4) solid #f3b7aa; border-radius: calc(var(--u) * 34);
+            font-family: var(--letra-carta); font-weight: 700; color: #a8493f; text-align: center;
+            font-size: max(15px, calc(var(--u) * 36)); line-height: 1.12;
+            box-shadow: 0 calc(var(--u) * 8) calc(var(--u) * 14) rgba(200, 110, 100, 0.28);
+            transform-origin: 100% 60%; animation: saltaBurbuja 3.2s ease-in-out infinite;
+        }
+        #burbuja::after {                       /* la colita del globo, apuntando a Snoopy */
+            content: ''; position: absolute; right: calc(var(--u) * -26); top: 40%;
+            width: calc(var(--u) * 30); height: calc(var(--u) * 30); background: #fffaf3;
+            border-right: calc(var(--u) * 4) solid #f3b7aa; border-top: calc(var(--u) * 4) solid #f3b7aa;
+            transform: rotate(45deg) skew(10deg, 10deg); border-radius: 0 calc(var(--u) * 8) 0 0;
+        }
+        #burbuja.pop { animation: popBurbuja 0.45s ease-out, saltaBurbuja 3.2s 0.45s ease-in-out infinite; }
+        @keyframes popBurbuja { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); } }
+        @keyframes saltaBurbuja { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-5px) rotate(-1deg); } }
+
+        .corazonSalta { position: absolute; pointer-events: none; z-index: 5; font-size: 28px; }
+
+        /* la avioneta de Snoopy que pasa saludando con un letrero */
+        #saludoAvion { position: absolute; top: 2.5%; left: 0; z-index: 4; pointer-events: none; display: flex; align-items: flex-start;
+                       animation: vueloSaludo 30s linear 1.2s infinite; will-change: transform; }
+        #holaAvion { position: absolute; top: 9%; left: 0; z-index: 4; pointer-events: none; display: none; align-items: flex-start; will-change: transform; }
+        #holaAvion.vuela { display: flex; animation: vueloHola 7s linear forwards; }
+        @keyframes vueloHola { 0% { transform: translateX(-110%); } 100% { transform: translateX(100vw); } }
+        #holaAvion .bob { position: relative; animation: bobSaludo 2.4s ease-in-out infinite; }
+        #saludoAvion .bob { position: relative; animation: bobSaludo 2.4s ease-in-out infinite; }
+        @keyframes vueloSaludo { 0% { transform: translateX(-110%); } 38% { transform: translateX(100vw); } 100% { transform: translateX(100vw); } }
+        @keyframes bobSaludo { 0%, 100% { transform: translateY(0) rotate(-1.5deg); } 50% { transform: translateY(10px) rotate(1.5deg); } }
+        #saludoAvion .cartel, #holaAvion .cartel {
+            position: absolute; left: 0; display: flex; align-items: center; justify-content: center;
+            font-family: 'Dancing Script', cursive; font-weight: 700; color: #fff; white-space: nowrap;
+            background: linear-gradient(180deg, #ff8fb1, #ff5c86); border: 2px solid #fff;
+            clip-path: polygon(0 0, 100% 0, 92% 50%, 100% 100%, 0 100%); text-shadow: 0 1px 4px rgba(140, 20, 60, 0.45);
+        }
+        #saludoAvion .cuerda, #holaAvion .cuerda { position: absolute; height: 2px; background: #8a5a4a; }
+        #saludoAvion img, #holaAvion img { position: absolute; display: block; }
+
+        /* botón de silencio */
+        #btnMusica {
+            position: fixed; top: 12px; right: 12px; z-index: 500; width: 44px; height: 44px; border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.9); background: rgba(255, 120, 160, 0.82); color: #fff;
+            font-size: 21px; line-height: 1; cursor: pointer; padding: 0; display: none;
+            box-shadow: 0 4px 12px rgba(150, 20, 60, 0.3); -webkit-tap-highlight-color: transparent;
+            transition: transform 0.15s, opacity 0.5s;
+        }
+        #btnMusica.visible { display: block; }
+        #btnMusica:active { transform: scale(0.92); }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <!-- snoopy.gif, pareja.png y snoopy_avion.png deben estar en la MISMA carpeta que este HTML -->
+    <img id="snoopy" src="snoopy.gif" alt="Snoopy bailando">
+    <img id="pareja" src="pareja.png" alt="Snoopy y Fifi">
+
+    <!-- Degradados que usan las tarjetas (se definen una sola vez) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <defs>
+            <radialGradient id="gGlobo" cx="36%" cy="30%" r="85%">
+                <stop offset="0" stop-color="#fff6f9"/>
+                <stop offset="0.38" stop-color="#ffdbe7"/>
+                <stop offset="0.78" stop-color="#ffb4cc"/>
+                <stop offset="1" stop-color="#f58db0"/>
+            </radialGradient>
+            <radialGradient id="gVolumen" cx="70%" cy="78%" r="65%">
+                <stop offset="0" stop-color="#d6406f" stop-opacity="0.30"/>
+                <stop offset="1" stop-color="#d6406f" stop-opacity="0"/>
+            </radialGradient>
+        </defs>
+    </svg>
+
+    <div id="pistaFinal">Tócalos ♥</div>
+    <button id="btnSig" class="btn-sig" type="button">Siguiente ♥</button>
+
+    <script>
+        const canvas = document.getElementById('c');
+        let ctx = canvas.getContext('2d');          // (let: para poder dibujar un momento en un lienzo de reserva)
+        // Mientras la puerta o la bienvenida tapan esta animación, no se dibuja nada (ahorra mucho trabajo)
+        window.pausaPrincipal = true;
+        const snoopy = document.getElementById('snoopy');
+        const pareja = document.getElementById('pareja');
+        const btnSig = document.getElementById('btnSig');
+        const pistaFinal = document.getElementById('pistaFinal');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const clamp = (v, a = 0, b = 1) => Math.min(Math.max(v, a), b);
+
+        // =====================================================
+        //  AJUSTES: aquí puedes cambiar textos, colores y tiempos
+        // =====================================================
+        const MENSAJES = ['Te amo'];                             // el mensaje grande del centro (una línea por frase)
+        const MENSAJE_LATERAL = [                                // el mensajito junto al árbol
+            'Eres mi lugar favorito',
+            'en todo el mundo.',
+            'Gracias por florecer conmigo.'
+        ];
+        const CARTAS = [                                         // las 4 tarjetas de corazón (cámbialas cuando quieras)
+            'Desde que llegaste, mis días tienen un color más bonito.',
+            'Contigo hasta el silencio se siente como un abrazo.',
+            'Eres mi pensamiento favorito a cualquier hora del día.',
+            'Si pudiera elegir de nuevo, te elegiría otras mil veces.'
+        ];
+        const COLORES_HOJAS = ['#ff4f7e', '#ff8fab', '#ffb703', '#f48c06',
+                               '#c77dff', '#9d4edd', '#ff6b6b', '#ffd6e0', '#e8416f'];
+        const COLORES_IMPACTO = ['#ff4f7e', '#ff8fab', '#ff6b9a', '#ff9ebb', '#e8416f', '#c77dff', '#ffb3c6'];
+        const COLORES_FINAL = ['#ffffff', '#ffd6e0', '#fff0a8', '#ff9ebb', '#ffe9a8'];
+        const COLOR_PINCEL = ['#ffd84d', '#ffe27a', '#ffc933'];  // amarillos de la pincelada
+        const NEBULOSA_COLORES = ['255, 120, 170', '255, 150, 205', '255, 175, 160', '210, 150, 255'];
+        const FUENTE_TITULO = '"Dancing Script", "Segoe Script", "Snell Roundhand", "Brush Script MT", cursive';
+
+        const DURACION_ONDA = 1.5;    // segundos que tarda en llenarse la pantalla
+        const PAUSA_MENSAJE = 4;      // segundos que se quedan texto + Snoopy antes de irse
+        const HOJAS_POR_TOQUE = [6, 10];   // hojas extra que caen cuando tocas el árbol
+        const CAIDA_CADA = [0.18, 0.55];   // cada cuántos segundos se suelta una hoja sola (mínimo y máximo)
+        const REBROTE = [2.5, 5];     // segundos que tarda en salir otra hojita donde se cayó una
+        const REPOSO = 2.5;           // segundos que una hoja descansa en el piso antes de desvanecerse
+        const DESVANECER = 1.5;       // segundos que tarda en desvanecerse
+        const MAX_EN_PISO = 45;       // si hay más hojas que esto en el piso, las más viejas se van ya
+
+        // Pide las letras desde ahora para que ya estén listas cuando se necesiten
+        if (document.fonts && document.fonts.load) {
+            document.fonts.load('700 48px "Dancing Script"').catch(function() {});
+            document.fonts.load('700 24px "Caveat"').catch(function() {});
+        }
+
+        // =====================================================
+        //  POSICIONES
+        // =====================================================
+        const hx = canvas.width / 2;
+        const hy = canvas.height * 0.4;
+        const bx = canvas.width * 0.24;
+        const by = canvas.height * 0.74;
+        const a = Math.atan2(hy - by, hx - bx);
+        const dx = Math.cos(a);
+        const dy = Math.sin(a);
+
+        const suelo = canvas.height * 0.88;
+
+        // ¿Pantalla vertical (celular)? Entonces el árbol va al centro y el mensaje arriba.
+        // En pantalla horizontal: árbol a la derecha, mensaje a la izquierda.
+        const vertical = canvas.width < canvas.height * 0.85;
+
+        // Geometría del árbol:
+        //   cx = centro horizontal del árbol
+        //   R  = "radio" de la copa (la copa mide ~2.28 R de ancho y ~2.25 R de alto)
+        //   yTip = punta de abajo del corazón, yc = centro del corazón matemático
+        const cx = vertical ? canvas.width / 2 : canvas.width * 0.68;
+        const alturaTronco = canvas.height * (vertical ? 0.20 : 0.25);
+        const margenArriba = canvas.height * (vertical ? 0.27 : 0.07);
+        const R = Math.min(
+            (suelo - alturaTronco - margenArriba) / 2.25,
+            canvas.width * (vertical ? 0.46 : 0.25) / 1.14
+        );
+        const yTip = suelo - alturaTronco;
+        const yc = yTip - R;
+
+        // La imagen al pie del árbol
+        // pareja.png mide 740 x 585 px (ya recortada a los personajes).
+        // Sus "pies" están al 94% de su altura, así que la colocamos para que
+        // los pies queden un poco abajo del suelo del árbol.
+        const PAREJA_ASPECTO = 585 / 740;    // alto / ancho
+        const PAREJA_PIES = 0.937;           // dónde están los pies (0 = arriba, 1 = abajo)
+        const anchoPareja = Math.min(
+            R * 1.75,                                         // tamaño en proporción al árbol
+            canvas.width * (vertical ? 0.92 : 0.30),          // sin salirse de la pantalla
+            alturaTronco * 1.4 / PAREJA_ASPECTO               // sin tapar demasiado el tronco
+        );
+        const altoPareja = anchoPareja * PAREJA_ASPECTO;
+        const piesY = suelo + (canvas.height - suelo) * 0.35; // un poquito abajo del suelo
+        pareja.style.width = anchoPareja + 'px';
+        pareja.style.left = cx + 'px';
+        pareja.style.bottom = (canvas.height - (piesY + (1 - PAREJA_PIES) * altoPareja)) + 'px';
+
+        // Las tarjetas de corazón: aparecen en el lugar del mensajito lateral
+        //   (tx, ty) = centro del corazón de la tarjeta
+        const cartaAncho = vertical
+            ? Math.min(canvas.width * 0.76, canvas.height * 0.38)
+            : clamp(Math.min(canvas.width * 0.30, canvas.height * 0.55), 220, 380);
+        const cartaAlto = cartaAncho * 1.1;
+        const CENTRO_Y = 98 / 220;           // el centro del corazón está al 44.5% de la altura de la tarjeta
+        const NOTCH = (98 - 48) / 220;       // la muesca de arriba (donde se ata la cuerda) está así de arriba del centro
+        const tx = vertical ? canvas.width / 2 : canvas.width * 0.24;
+        const ty = vertical ? canvas.height * 0.30 : canvas.height * 0.42;
+        btnSig.style.left = tx + 'px';
+        btnSig.style.top = (ty + 0.50 * cartaAlto + 8) + 'px';
+
+        // La avioneta de Snoopy (snoopy_avion.png mide 650 x 479 px)
+        const AVION_ASPECTO = 479 / 650;            // alto / ancho
+        const AVION_COLA = { x: 0.03, y: 0.653 };   // dónde se amarra la cuerda (la colita), en fracción de la imagen
+        const avionAncho = vertical ? canvas.width * 0.40 : clamp(canvas.width * 0.17, 150, 250);
+        const avionAlto = avionAncho * AVION_ASPECTO;
+        const avionVel = clamp(canvas.width * 0.30, 260, 440);      // píxeles por segundo
+        const cuerdaX = cartaAncho * 0.5 + avionAncho * 0.35;       // largo horizontal de la cuerda
+        const cuerdaCaida = canvas.height * 0.06;                   // cuánto más abajo cuelga la tarjeta
+        // altura a la que vuela: la tarjeta debe llegar justo a la altura ty
+        const avionY0 = Math.max(
+            avionAlto * 0.55 + canvas.height * 0.03,
+            ty - NOTCH * cartaAlto - cuerdaCaida - (AVION_COLA.y - 0.5) * avionAlto
+        );
+        const avionImg = new Image();
+        let avionListo = false;
+        avionImg.onload = function() { avionListo = true; };
+        avionImg.src = 'snoopy_avion.png';
+
+        // =====================================================
+        //  ESTADO
+        // =====================================================
+        // etapa 0 = jugando (arco y flecha)
+        // etapa 1 = el corazón sale rebotado, cae y rebota en el piso
+        // etapa 2 = onda rosa + mensaje + Snoopy
+        // etapa 3 = todo se desvanece, crece el árbol, caen hojas y se pueden abrir las tarjetas
+        let etapa = 0;
+        let tEtapa = 0;
+        function cambiarEtapa(n, now) {
+            etapa = n;
+            tEtapa = now;
+            if (window.musica) window.musica.escena(n === 2 ? 'teamo' : n === 3 ? 'arbol' : 'juego');
+        }
+
+        let jalando = false;
+        let dedo = {x: 0, y: 0};
+        let fuerza = 0;
+        let flecha = null;
+        let flechaClavada = false;
+        let ultimo = 0;
+        let brillo = 0;          // intensidad de la nebulosa rosa alrededor del corazón (0 = apagada)
+
+        const cor = {
+            x: hx, y: hy,
+            vx: 0, vy: 0,
+            rot: 0, vrot: 0,
+            s: 60,
+            sq: 0, sqv: 0,       // compresión al golpear el piso (sq) y su velocidad (sqv)
+            infl: 1,             // "inflada" antes de explotar
+            asentado: false, tAsentado: 0, rotFinal: 0
+        };
+        const GRAVEDAD = canvas.height * 1.8;
+        const EMPUJE_VY = -canvas.height * 0.5;
+
+        const T_TEXTO = DURACION_ONDA;
+        const T_GIF = T_TEXTO + MENSAJES.length * 0.8 + 1.8;
+
+        // Árbol
+        let ramas = [];
+        let hojas = [];
+        let caidas = [];        // hojas que se soltaron del árbol
+        let tArbol = -1;        // segundos desde que empezó a crecer el árbol
+        const T_GLOBOS = 8;     // cuándo (en tArbol) empiezan a subir los globos de fondo
+        const T_MSG = 2.2;      // cuándo empieza a aparecer el mensajito lateral (en tArbol)
+        let proxCaida = 1;      // cuenta regresiva para soltar la siguiente hoja sola
+        let proxRafaga = 7;     // cuenta regresiva para un "airecito" que suelta varias juntas
+
+        let particulas = [];    // corazoncitos de las explosiones
+
+        // Tarjetas y avioneta
+        const cartas = {
+            estado: 'inactivo',   // inactivo | entrando | visible | vuelo | cerrando
+            idx: 0,               // cuál tarjeta toca (0 a 3)
+            t: 0,                 // segundos en el estado actual
+            lateral: 1,           // visibilidad del mensajito lateral (1 = se ve)
+            actual: null,         // la tarjeta que se está mostrando
+            saliente: null,       // la que se está desvaneciendo
+            btnOn: false
+        };
+        const avion = { activo: false, x: 0, y: 0, rot: 0, t: 0, soltada: false, carta: null, cuerdaFin: null };
+
+        const fondo = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        fondo.addColorStop(0, '#fff8f4');
+        fondo.addColorStop(1, '#ffe1df');
+
+        // =====================================================
+        //  FUNCIONES DE DIBUJO
+        // =====================================================
+        function corazon(cx, cy, s) {
+            ctx.beginPath();
+            ctx.moveTo(cx, cy + s*0.9);
+            ctx.bezierCurveTo(cx - s*1.5, cy - s*0.1, cx - s*0.7, cy - s*1.1, cx, cy - s*0.4);
+            ctx.bezierCurveTo(cx + s*0.7, cy - s*1.1, cx + s*1.5, cy - s*0.1, cx, cy + s*0.9);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // La onda NO llena toda la pantalla: se recorta a una franja y arriba y abajo
+        // quedan dos barras negras (como en el cine). BARRA = qué parte de la altura ocupa cada barra.
+        const BARRA = 0.14;
+        let barraPx = 0;        // alto actual de cada barra (crece con la onda y se retira al desvanecerse)
+
+        function dibujarOnda(progreso, alpha) {
+            const r = progreso * Math.hypot(canvas.width, canvas.height);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, barraPx, canvas.width, canvas.height - 2 * barraPx);   // solo se pinta dentro de la franja
+            ctx.clip();
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = '#e8416f';
+            ctx.beginPath();
+            ctx.arc(cor.x, cor.y, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function dibujarBarras() {
+            if (barraPx < 0.5) return;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, barraPx);
+            ctx.fillRect(0, canvas.height - barraPx, canvas.width, barraPx);
+        }
+
+        // ---------- Globos de corazón de fondo (suben despacito cuando el árbol ya está formado) ----------
+        const GLOBOS_MAX = 16;
+        const GLOBOS_COLORES = [['#ffd0dc', '#ff7fa6'], ['#ffe3ec', '#ffa6c0'], ['#e6ceff', '#b783ff'],
+                                ['#ffd6c2', '#ff8f85'], ['#ffc2d2', '#ff5c86'], ['#fff0f4', '#ffb3c8']];
+        let globos = [];
+        let proxGlobo = 0;
+
+        function actualizarGlobos(dt) {
+            const k = canvas.height / 800;
+            proxGlobo -= dt;
+            if (proxGlobo <= 0 && globos.length < GLOBOS_MAX) {
+                const s = (16 + Math.random() * 28) * k;
+                globos.push({ x: canvas.width * (0.03 + 0.94 * Math.random()), y: canvas.height + s * 3, s: s,
+                              vy: (20 + Math.random() * 26) * k, t: 0, fase: Math.random() * 6.28,
+                              amax: 0.3 + Math.random() * 0.22,
+                              col: GLOBOS_COLORES[Math.floor(Math.random() * GLOBOS_COLORES.length)] });
+                proxGlobo = 0.8 + Math.random() * 1.4;
+            }
+            globos.forEach(function(g) { g.t += dt; g.y -= g.vy * dt; });
+            globos = globos.filter(function(g) { return g.y > -g.s * 4; });
+        }
+
+        function dibujarGlobos() {
+            const H = canvas.height;
+            globos.forEach(function(g) {
+                const s = g.s;
+                const a = g.amax * clamp((H - g.y + s) / (H * 0.18)) * clamp((g.y + s * 3) / (H * 0.25));
+                if (a <= 0.005) return;
+                ctx.save();
+                ctx.translate(g.x + Math.sin(g.t * 0.8 + g.fase) * s * 0.7, g.y);
+                ctx.rotate(Math.sin(g.t * 0.7 + g.fase) * 0.12);
+                ctx.globalAlpha = a;
+                // el cordelito
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.lineWidth = Math.max(1, s * 0.04);
+                ctx.beginPath();
+                ctx.moveTo(0, s * 1.0);
+                ctx.bezierCurveTo(s * 0.25, s * 1.6, -s * 0.25, s * 2.0, 0, s * 2.7);
+                ctx.stroke();
+                // el globo, con degradado para que se vea redondito y brilloso
+                const gr = ctx.createRadialGradient(-s * 0.4, -s * 0.4, s * 0.05, 0, 0, s * 1.3);
+                gr.addColorStop(0, g.col[0]);
+                gr.addColorStop(1, g.col[1]);
+                ctx.fillStyle = gr;
+                corazon(0, 0, s);
+                // el nudito de abajo
+                ctx.fillStyle = g.col[1];
+                ctx.beginPath();
+                ctx.moveTo(0, s * 0.88); ctx.lineTo(-s * 0.13, s * 1.1); ctx.lineTo(s * 0.13, s * 1.1);
+                ctx.closePath(); ctx.fill();
+                // los brillos
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.save(); ctx.translate(-s * 0.5, -s * 0.38); ctx.rotate(-0.6);
+                ctx.beginPath(); ctx.ellipse(0, 0, s * 0.26, s * 0.1, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+                ctx.beginPath(); ctx.arc(-s * 0.18, -s * 0.52, s * 0.05, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        // ---------- El mensaje grande ("Te amo") con su pincelada amarilla ----------
+        // Cada "cerda" del pincel es una línea con su propio temblor, grosor y largo.
+        // Como no todas terminan al mismo tiempo, el final del trazo queda irregular.
+        const CERDAS = [];
+        for (let k = 0; k < 9; k++) {
+            CERDAS.push({
+                off: (k / 8) * 2 - 1 + (Math.random() - 0.5) * 0.18,   // posición dentro del grosor (-1 a 1)
+                ini: Math.random() * 0.05,                              // empieza un poquito antes o después
+                fin: 0.9 + Math.random() * 0.1,                         // termina un poquito antes o después
+                fase: Math.random() * Math.PI * 2,
+                amp: 0.4 + Math.random() * 0.8,
+                color: COLOR_PINCEL[k % COLOR_PINCEL.length],
+                alpha: 0.78 + Math.random() * 0.22
+            });
+        }
+
+        function dibujarPincelada(x, y, ancho, progreso, tam, alphaGlobal) {
+            const grosor = tam * 0.21;
+            const seg = 40;
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            CERDAS.forEach(function(c) {
+                const pk = clamp((progreso - c.ini) / (c.fin - c.ini));
+                if (pk <= 0) return;
+                ctx.strokeStyle = c.color;
+                ctx.globalAlpha = alphaGlobal * c.alpha;
+                ctx.lineWidth = grosor / CERDAS.length * 1.9;
+                ctx.beginPath();
+                for (let i = 0; i <= seg; i++) {
+                    const u = i / seg * pk;                     // hasta dónde ha avanzado el trazo (0 a 1)
+                    const px = x - ancho / 2 + ancho * u;
+                    // una sonrisa suave que sube un poco hacia la derecha
+                    const curva = Math.sin(Math.PI * u) * tam * 0.12 - u * tam * 0.10;
+                    // el trazo se hace más delgado en las puntas, como al apoyar y soltar el pincel
+                    const w = grosor * (0.18 + 0.82 * Math.pow(Math.sin(Math.PI * u), 0.6));
+                    const temblor = Math.sin(u * 17 + c.fase) * c.amp * 1.2 + Math.sin(u * 41 + c.fase * 2) * 0.5;
+                    const py = y + curva + c.off * w / 2 + temblor;
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        function dibujarMensaje(t, alphaGlobal) {
+            const tam = Math.min(110, canvas.width * 0.22);
+            const n = MENSAJES.length;
+            const paso = tam * 1.05;
+            ctx.font = `700 ${tam}px ${FUENTE_TITULO}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            let anchoMax = 0;
+            MENSAJES.forEach(function(linea, i) {
+                anchoMax = Math.max(anchoMax, ctx.measureText(linea).width);
+                // cada línea aparece 0.8 s después de la anterior, creciendo un poquito
+                const p = clamp((t - T_TEXTO - i * 0.8) / 0.9);
+                const alpha = p * alphaGlobal;
+                if (alpha <= 0) return;
+                const esc = 0.8 + 0.2 * easeOutBack(p);
+                ctx.save();
+                ctx.translate(hx, hy + (i - (n - 1) / 2) * paso);
+                ctx.scale(esc, esc);
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.shadowColor = `rgba(120, 10, 50, ${0.28 * alpha})`;
+                ctx.shadowBlur = 12;
+                ctx.shadowOffsetY = 3;
+                ctx.fillText(linea, 0, 0);
+                ctx.restore();
+            });
+
+            // la pincelada empieza cuando ya apareció la última línea
+            const tPincel = T_TEXTO + (n - 1) * 0.8 + 0.7;
+            const p = clamp((t - tPincel) / 1.1);
+            if (p > 0) {
+                const suave = p * p * (3 - 2 * p);   // empieza y termina despacito
+                dibujarPincelada(hx, hy + ((n - 1) / 2) * paso + tam * 0.55, anchoMax * 1.12, suave, tam, alphaGlobal);
+            }
+        }
+
+        // Mensajito que aparece junto al árbol, línea por línea
+        function dibujarMensajeLateral(now) {
+            const L = cartas.lateral;          // se va cuando empiezan las tarjetas
+            if (L < 0.01) return;
+            const n = MENSAJE_LATERAL.length;
+            const tam = vertical ? Math.min(24, canvas.width * 0.062) : Math.min(34, canvas.width * 0.026);
+            const mx = vertical ? canvas.width / 2 : canvas.width * 0.24;
+            const my = vertical ? canvas.height * 0.12 : canvas.height * 0.4;
+            const interlineado = tam * 1.6;
+
+            ctx.font = `italic ${tam}px Georgia, serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#b83a5e';
+            MENSAJE_LATERAL.forEach(function(linea, i) {
+                const alpha = clamp((tArbol - T_MSG - i * 1.3) / 1.1) * L;
+                if (alpha <= 0) return;
+                ctx.globalAlpha = alpha;
+                // sube 8 px mientras aparece, se siente más suave
+                ctx.fillText(linea, mx, my + (i - (n - 1) / 2) * interlineado + (1 - alpha) * 8);
+            });
+
+            // corazoncito arriba del mensaje
+            const a0 = clamp((tArbol - T_MSG) / 1.1) * L;
+            if (a0 > 0) {
+                ctx.globalAlpha = a0;
+                ctx.fillStyle = '#ff4f7e';
+                corazon(mx, my - ((n - 1) / 2 + 1.5) * interlineado, tam * 0.4 * (1 + 0.08 * Math.sin(now / 300)));
+            }
+
+            // pista para abrir las tarjetas (late suavemente)
+            const aH = clamp((tArbol - tListoCartas()) / 1.0) * L;
+            if (aH > 0.01) {
+                const yH = my + ((n - 1) / 2 + 1.8) * interlineado;
+                ctx.globalAlpha = aH * (0.65 + 0.35 * Math.sin(now / 500));
+                ctx.font = `italic ${tam * 0.78}px Georgia, serif`;
+                ctx.fillStyle = '#c0587a';
+                ctx.fillText('Toca el árbol', mx, yH);
+                const w = ctx.measureText('Toca el árbol').width;
+                corazon(mx + w / 2 + tam * 0.7, yH, tam * 0.28);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        // ---------- Nebulosa rosa alrededor del corazón ----------
+        // Varias capas con movimiento propio, para que parezca que tiene energía:
+        //  1) un halo grande que "respira"  2) nubes de colores que giran
+        //  3) un aura con forma de corazón que ondula  4) chispitas que titilan
+        function dibujarNebulosa(x, y, s, intensidad, now) {
+            if (intensidad < 0.02) return;
+            const k = Math.min(intensidad, 1.3);
+            const t = now / 1000;
+            ctx.save();
+
+            const R0 = s * (3.3 + 0.3 * Math.sin(t * 1.9));
+            let g = ctx.createRadialGradient(x, y, s * 0.3, x, y, R0);
+            g.addColorStop(0, `rgba(255, 110, 165, ${0.42 * k})`);
+            g.addColorStop(0.45, `rgba(255, 140, 190, ${0.20 * k})`);
+            g.addColorStop(1, 'rgba(255, 170, 210, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, R0, 0, Math.PI * 2);
+            ctx.fill();
+
+            for (let i = 0; i < NEBULOSA_COLORES.length; i++) {
+                const ang = t * (0.55 + 0.17 * i) * (i % 2 ? -1 : 1) + i * 1.9;
+                const dist = s * (1.05 + 0.4 * Math.sin(t * 0.9 + i * 2.1));
+                const px = x + Math.cos(ang) * dist * 1.15;
+                const py = y + Math.sin(ang) * dist * 0.85;
+                const r = s * (1.5 + 0.35 * Math.sin(t * 1.3 + i * 1.3));
+                g = ctx.createRadialGradient(px, py, 0, px, py, r);
+                g.addColorStop(0, `rgba(${NEBULOSA_COLORES[i]}, ${0.30 * k})`);
+                g.addColorStop(1, `rgba(${NEBULOSA_COLORES[i]}, 0)`);
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(px, py, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.translate(x, y);
+            ctx.shadowColor = `rgba(255, 90, 150, ${0.75 * k})`;
+            ctx.shadowBlur = s * 0.7;
+            ctx.fillStyle = `rgba(255, 150, 190, ${0.20 * k})`;
+            corazon(0, 0, s * (1.22 + 0.07 * Math.sin(t * 2.6)));
+
+            ctx.shadowBlur = 0;
+            for (let j = 0; j < 10; j++) {
+                const ang = j * 0.628 + t * 0.35 * (j % 2 ? 1 : -1);
+                const d = s * (1.9 + 0.6 * Math.sin(t * 1.1 + j * 1.7));
+                const tw = 0.5 + 0.5 * Math.sin(t * 3 + j * 2.3);          // titileo
+                const px = Math.cos(ang) * d, py = Math.sin(ang) * d * 0.85;
+                const r = s * (0.035 + 0.035 * tw);
+                ctx.fillStyle = `rgba(255, 120, 170, ${0.85 * tw * Math.min(k, 1)})`;
+                ctx.beginPath();            // estrellita de 4 puntas
+                ctx.moveTo(px, py - r * 2.2); ctx.lineTo(px + r * 0.6, py - r * 0.6);
+                ctx.lineTo(px + r * 2.2, py); ctx.lineTo(px + r * 0.6, py + r * 0.6);
+                ctx.lineTo(px, py + r * 2.2); ctx.lineTo(px - r * 0.6, py + r * 0.6);
+                ctx.lineTo(px - r * 2.2, py); ctx.lineTo(px - r * 0.6, py - r * 0.6);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // ---------- Corazoncitos que salen disparados (explosiones) ----------
+        function lanzarCorazones(x, y, n, op) {
+            const o = Object.assign({ vmin: 120, vmax: 340, smin: 5, smax: 10, vida: [0.9, 1.5], colores: COLORES_IMPACTO }, op);
+            const esc = canvas.height / 800;     // todo en proporción al tamaño de la pantalla
+            for (let i = 0; i < n; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const v = (o.vmin + Math.random() * (o.vmax - o.vmin)) * esc;
+                particulas.push({
+                    x: x, y: y,
+                    vx: Math.cos(ang) * v, vy: Math.sin(ang) * v,
+                    rot: (Math.random() - 0.5) * 1.2, vrot: (Math.random() - 0.5) * 4,
+                    s: (o.smin + Math.random() * (o.smax - o.smin)) * esc,
+                    color: o.colores[Math.floor(Math.random() * o.colores.length)],
+                    t: 0, vida: o.vida[0] + Math.random() * (o.vida[1] - o.vida[0])
+                });
+            }
+        }
+
+        function actualizarParticulas(dt) {
+            for (const p of particulas) {
+                p.t += dt;
+                const freno = Math.max(0, 1 - 1.6 * dt);          // el aire los va frenando
+                p.vx *= freno;
+                p.vy = p.vy * freno + canvas.height * 0.10 * dt;   // y caen muy suavemente
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.rot += p.vrot * dt;
+            }
+            particulas = particulas.filter(p => p.t < p.vida);
+        }
+
+        function dibujarParticulas() {
+            for (const p of particulas) {
+                const u = p.t / p.vida;
+                const alpha = u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45;       // desaparecen suave al final
+                ctx.globalAlpha = Math.max(0, alpha) * 0.95;
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rot);
+                ctx.fillStyle = p.color;
+                corazon(0, 0, p.s * (0.7 + 0.3 * Math.min(1, u * 6)));   // nacen creciendo un poquito
+                ctx.restore();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        // =====================================================
+        //  FÍSICA DEL CORAZÓN (etapa 1)
+        // =====================================================
+        // Simula el rebote con vx = 1 y mide cuánto se desplaza en x.
+        // Como la velocidad horizontal solo se multiplica por 0.7 en cada rebote,
+        // el desplazamiento total es proporcional a vx. Así sabemos qué vx
+        // darle al corazón para que caiga justo donde va a crecer el árbol.
+        function desplazamientoPorUnidadDeVx() {
+            let x = 0, y = hy, vx = 1, vy = EMPUJE_VY;
+            const paso = 1 / 120;
+            const yPiso = suelo - cor.s * 0.9;
+            for (let i = 0; i < 3000; i++) {
+                vy += GRAVEDAD * paso;
+                x += vx * paso;
+                y += vy * paso;
+                if (y >= yPiso) {
+                    y = yPiso;
+                    if (Math.abs(vy) < canvas.height * 0.15) break;
+                    vy *= -0.45;
+                    vx *= 0.7;
+                }
+            }
+            return x || 1;
+        }
+
+        function actualizarCorazon(dt, now) {
+            if (cor.asentado) {
+                cor.rot += (cor.rotFinal - cor.rot) * Math.min(1, dt * 12);
+                // Se infla: primero se encoge un poquito (toma aire) y luego crece de golpe.
+                // Al terminar explota en corazoncitos y empieza la onda rosa.
+                const p = clamp((now - cor.tAsentado) / 650);
+                cor.infl = p < 0.3 ? 1 - 0.1 * (p / 0.3) : 0.9 + 0.75 * Math.pow((p - 0.3) / 0.7, 2);
+                if (p >= 1) {
+                    lanzarCorazones(cor.x, cor.y, 24, {
+                        vmin: 220, vmax: 560, smin: 7, smax: 13, vida: [1.0, 1.8], colores: COLORES_FINAL
+                    });
+                    cambiarEtapa(2, now);
+                }
+                return;
+            }
+
+            cor.vy += GRAVEDAD * dt;
+            cor.x += cor.vx * dt;
+            cor.y += cor.vy * dt;
+            cor.rot += cor.vrot * dt;
+
+            const yPiso = suelo - cor.s * 0.9;
+            if (cor.y >= yPiso) {
+                cor.y = yPiso;
+                // al tocar el piso se aplasta: más fuerte cuanto más rápido caía
+                cor.sq = Math.min(0.34, 0.06 + Math.abs(cor.vy) / (canvas.height * 1.4) * 0.30);
+                cor.sqv = 0;
+                if (Math.abs(cor.vy) < canvas.height * 0.15) {
+                    cor.vx = cor.vy = cor.vrot = 0;
+                    cor.asentado = true;
+                    cor.tAsentado = now;
+                    cor.rotFinal = Math.round(cor.rot / (Math.PI * 2)) * Math.PI * 2;
+                } else {
+                    cor.vy *= -0.45;
+                    cor.vx *= 0.7;
+                    cor.vrot *= 0.5;
+                }
+            }
+        }
+
+        // La compresión vuelve a 0 como un resorte (y se pasa un poquito: se estira) como una pelota
+        function actualizarSquash(dt) {
+            const K = 420, C = 24;
+            cor.sqv += (-K * cor.sq - C * cor.sqv) * dt;
+            cor.sq += cor.sqv * dt;
+        }
+
+        // =====================================================
+        //  ÁRBOL EN FORMA DE CORAZÓN (etapa 3)
+        // =====================================================
+        // La forma: la curva clásica (x² + y² − 1)³ − x²y³ = 0.
+        // Si el resultado es ≤ 0, el punto (u, v) está DENTRO del corazón.
+        function valorCorazon(u, v) {
+            const q = u * u + v * v - 1;
+            return q * q * q - u * u * v * v * v;
+        }
+
+        // Puntos donde van a terminar las ramas (cada uno tendrá una hoja):
+        //  1) un anillo sobre el borde, para que la silueta se vea bien clara
+        //  2) puntos al azar dentro, separados entre sí para que no se amontonen
+        function puntosDelCorazon() {
+            const pts = [];
+            const NBORDE = 64;
+            for (let i = 0; i < NBORDE; i++) {
+                const th = (i / NBORDE) * Math.PI * 2 + 0.02;
+                const c = Math.cos(th), s = Math.sin(th);
+                let r = 0;
+                // caminamos desde el centro hacia afuera hasta salir del corazón
+                while (r < 2 && valorCorazon(c * (r + 0.01), s * (r + 0.01)) <= 0) r += 0.01;
+                r *= 0.93;                       // un poquito adentro, para que la hoja no sobresalga
+                pts.push({u: c * r, v: s * r});
+            }
+            const SEPARACION = 0.125;
+            for (let intento = 0; intento < 6000; intento++) {
+                const u = (Math.random() * 2 - 1) * 1.14;
+                const v = -1 + Math.random() * 2.26;
+                if (valorCorazon(u, v) > -0.02) continue;
+                if (pts.some(p => Math.hypot(p.u - u, p.v - v) < SEPARACION)) continue;
+                pts.push({u: u, v: v});
+            }
+            // de coordenadas del corazón (u, v) a píxeles
+            return pts.map(p => ({x: cx + p.u * R, y: yc - p.v * R}));
+        }
+
+        function agregarHoja(x, y, t0) {
+            hojas.push({
+                x: x, y: y,
+                s: R * (0.038 + Math.random() * 0.022),   // un poco más grandes que antes
+                color: COLORES_HOJAS[Math.floor(Math.random() * COLORES_HOJAS.length)],
+                rot: (Math.random() - 0.5) * 0.8,
+                fase: Math.random() * Math.PI * 2,
+                inicio: t0 + Math.random() * 0.35,   // aparece cuando su rama terminó
+                vacia: false,       // true = se le cayó la hoja y espera a que le salga otra
+                soltando: false,    // true = ya la eligieron y está por caerse
+                retardo: 0, regrow: 0
+            });
+        }
+
+        // Crea las ramas dividiendo el grupo de puntos en dos mitades, una y otra vez:
+        //  - la rama apunta al centro del grupo (se queda al 60% del camino)
+        //  - de ahí salen dos ramas, una por mitad
+        //  - cuando queda un solo punto, la rama llega hasta él y ahí va una hoja
+        // Así las ramas llenan exactamente la forma del corazón.
+        function crecer(x, y, pts, inicio, total) {
+            const n = pts.length;
+            let ex, ey;
+            if (n === 1) {
+                ex = pts[0].x; ey = pts[0].y;
+            } else {
+                let mx = 0, my = 0;
+                pts.forEach(p => { mx += p.x; my += p.y; });
+                mx /= n; my /= n;
+                ex = x + (mx - x) * 0.6;
+                ey = y + (my - y) * 0.6;
+                // un pequeño desvío de lado para que no se vea tan recto
+                const largo0 = Math.hypot(ex - x, ey - y) || 1;
+                const desvio = (Math.random() - 0.5) * 0.25 * largo0;
+                const px = -(ey - y) / largo0, py = (ex - x) / largo0;
+                ex += px * desvio;
+                ey += py * desvio;
+            }
+
+            const largo = Math.hypot(ex - x, ey - y);
+            const dur = Math.max(0.1, largo / (R * 1.5));
+            ramas.push({
+                x1: x, y1: y, x2: ex, y2: ey,
+                grosor: 1.2 + R * 0.055 * Math.sqrt(n / total),   // más puntos = rama más gruesa
+                inicio: inicio, dur: dur
+            });
+            const fin = inicio + dur;
+
+            if (n === 1) {
+                agregarHoja(ex, ey, fin);
+                if (Math.random() < 0.5) {      // una hojita extra al lado, para que se vea más lleno
+                    const ox = ex + (Math.random() - 0.5) * R * 0.12;
+                    const oy = ey + (Math.random() - 0.5) * R * 0.12;
+                    if (valorCorazon((ox - cx) / R, (yc - oy) / R) < 0) agregarHoja(ox, oy, fin);
+                }
+                return;
+            }
+
+            // dividir por el eje donde los puntos están más separados
+            let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
+            pts.forEach(p => {
+                minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x);
+                miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+            });
+            const horizontal = (maxx - minx) >= (maxy - miny);
+            const orden = pts.slice().sort((p, q) => horizontal ? p.x - q.x : p.y - q.y);
+            const mitad = n >> 1;
+            crecer(ex, ey, orden.slice(0, mitad), fin, total);
+            crecer(ex, ey, orden.slice(mitad), fin, total);
+        }
+
+        function crearArbol() {
+            ramas = [];
+            hojas = [];
+            caidas = [];
+            const pts = puntosDelCorazon();
+
+            // tronco: del suelo hasta adentro de la copa
+            const yRaiz = yTip - R * 0.5;
+            const largoTronco = (suelo + 6) - yRaiz;
+            const durTronco = largoTronco / (R * 1.5);
+            ramas.push({
+                x1: cx, y1: suelo + 6, x2: cx, y2: yRaiz,
+                grosor: 1.2 + R * 0.055,
+                inicio: 0, dur: durTronco
+            });
+            crecer(cx, yRaiz, pts, durTronco, pts.length);
+        }
+
+        function easeOutBack(p) {
+            const c1 = 1.70158, c3 = c1 + 1;
+            return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+        }
+
+        function dibujarArbol(now) {
+            ctx.strokeStyle = '#6b4a3a';
+            ctx.lineCap = 'round';
+            for (const r of ramas) {
+                const p = clamp((tArbol - r.inicio) / r.dur);
+                if (p === 0) continue;
+                ctx.lineWidth = r.grosor;
+                ctx.beginPath();
+                ctx.moveTo(r.x1, r.y1);
+                ctx.lineTo(r.x1 + (r.x2 - r.x1) * p, r.y1 + (r.y2 - r.y1) * p);
+                ctx.stroke();
+            }
+            for (const h of hojas) {
+                if (h.vacia) continue;                       // se le cayó: no la dibujamos
+                const p = clamp((tArbol - h.inicio) / 0.6);
+                if (p === 0) continue;
+                const latido = 1 + 0.05 * Math.sin(now / 400 + h.fase);
+                // si ya la eligieron para caerse, tiembla un poquito antes de soltarse
+                const temblor = h.soltando ? Math.sin(now / 30 + h.fase * 5) * 1.4 : 0;
+                ctx.save();
+                ctx.translate(h.x + temblor, h.y);
+                ctx.rotate(h.rot);
+                ctx.fillStyle = h.color;
+                corazon(0, 0, h.s * easeOutBack(p) * latido);
+                ctx.restore();
+            }
+        }
+
+        // =====================================================
+        //  HOJAS QUE CAEN (solas, y también al tocar el árbol)
+        // =====================================================
+        function enZonaArbol(x, y) {
+            return Math.abs(x - cx) < R * 1.2 && y > yc - R * 1.3 && y < suelo;
+        }
+
+        // Marca las hojas más cercanas a un punto (con un poco de azar) para que se suelten
+        function soltarCercanas(px, py, cuantas) {
+            const candidatas = hojas.filter(h =>
+                !h.vacia && !h.soltando && (tArbol - h.inicio) >= 0.6);
+            if (candidatas.length === 0) return;
+
+            candidatas.forEach(h => {
+                h.puntaje = Math.hypot(h.x - px, h.y - py) + Math.random() * R * 0.6;
+            });
+            candidatas.sort((p, q) => p.puntaje - q.puntaje);
+
+            candidatas.slice(0, cuantas).forEach(h => {
+                h.soltando = true;
+                h.retardo = Math.random() * 0.9;   // no se sueltan todas a la vez
+            });
+        }
+
+        function tocarArbol(px, py) {
+            const [mn, mx] = HOJAS_POR_TOQUE;
+            soltarCercanas(px, py, mn + Math.floor(Math.random() * (mx - mn + 1)));
+        }
+
+        // Una hoja cualquiera se prepara para caer (primero tiembla un momento)
+        function soltarAlAzar() {
+            for (let i = 0; i < 16; i++) {
+                const h = hojas[Math.floor(Math.random() * hojas.length)];
+                if (h && !h.vacia && !h.soltando && (tArbol - h.inicio) >= 0.6) {
+                    h.soltando = true;
+                    h.retardo = 0.3 + Math.random() * 0.7;
+                    return;
+                }
+            }
+        }
+
+        // Un "airecito": 4 o 5 hojas vecinas se sueltan casi juntas
+        function soltarRafaga() {
+            const px = cx + (Math.random() - 0.5) * R * 1.6;
+            const py = yc + (Math.random() - 0.5) * R * 1.2;
+            soltarCercanas(px, py, 4 + Math.floor(Math.random() * 2));
+        }
+
+        function soltarHoja(h) {
+            const balanceo = Math.random() < 0.4;    // algunas se balancean más al caer
+            caidas.push({
+                x0: h.x, x: h.x, y: h.y,
+                vy: 0, t: 0,
+                g: 0.7 + Math.random() * 0.6,                    // cada una cae con su propia "ligereza"
+                vmax: 0.6 + Math.random() * 0.7,                 // y con su propia velocidad máxima
+                freq: 1.5 + Math.random() * 1.5,                 // qué tan rápido se mece
+                fase: Math.random() * Math.PI * 2,
+                amp: R * (0.05 + Math.random() * 0.10) * (balanceo ? 1.9 : 1),   // qué tanto se mece de lado
+                deriva: (Math.random() - 0.5) * R * 0.3,         // empujoncito del aire (px/s)
+                giro: (Math.random() - 0.5) * 0.8,               // vueltita lenta (rad/s)
+                rot0: h.rot, rot: h.rot,
+                s: h.s, color: h.color,
+                yPiso: suelo + canvas.height * (0.005 + Math.random() * 0.07),
+                estado: 'cae',     // cae -> reposo -> desv (se desvanece)
+                espera: 0, alpha: 1
+            });
+        }
+
+        function actualizarHojas(dt) {
+            // caída automática: una hoja cada rato, y de vez en cuando un airecito
+            if (tArbol > 2.5) {
+                proxCaida -= dt;
+                while (proxCaida <= 0) {
+                    soltarAlAzar();
+                    proxCaida += CAIDA_CADA[0] + Math.random() * (CAIDA_CADA[1] - CAIDA_CADA[0]);
+                }
+                proxRafaga -= dt;
+                if (proxRafaga <= 0) {
+                    soltarRafaga();
+                    proxRafaga = 7 + Math.random() * 6;
+                }
+            }
+
+            for (const h of hojas) {
+                if (h.soltando) {
+                    h.retardo -= dt;
+                    if (h.retardo <= 0) {
+                        soltarHoja(h);
+                        h.soltando = false;
+                        h.vacia = true;
+                        // a la rama le sale otra hojita en el mismo lugar, unos segundos después
+                        h.regrow = REBROTE[0] + Math.random() * (REBROTE[1] - REBROTE[0]);
+                    }
+                } else if (h.vacia) {
+                    h.regrow -= dt;
+                    if (h.regrow <= 0) {
+                        h.vacia = false;
+                        h.inicio = tArbol;    // vuelve a brotar desde cero
+                        h.color = COLORES_HOJAS[Math.floor(Math.random() * COLORES_HOJAS.length)];
+                    }
+                }
+            }
+        }
+
+        function actualizarCaidas(dt) {
+            const G = canvas.height * 0.5;       // gravedad suave (una hoja no cae como piedra)
+            const VMAX = canvas.height * 0.2;    // y tiene velocidad máxima, como con el aire
+            const enPiso = [];
+            for (const c of caidas) {
+                if (c.estado === 'cae') {
+                    c.t += dt;
+                    c.vy = Math.min(c.vy + G * c.g * dt, VMAX * c.vmax);
+                    c.y += c.vy * dt;
+                    // se mece de lado como una hojita de verdad
+                    c.x = c.x0 + Math.sin(c.t * c.freq + c.fase) * c.amp + c.deriva * c.t;
+                    c.rot = c.rot0 + Math.sin(c.t * c.freq + c.fase + 1.3) * 0.8 + c.giro * c.t;
+                    if (c.y >= c.yPiso) {
+                        c.y = c.yPiso;
+                        c.estado = 'reposo';
+                        c.espera = REPOSO + Math.random() * 2;
+                    }
+                } else if (c.estado === 'reposo') {
+                    c.espera -= dt;
+                    if (c.espera <= 0) c.estado = 'desv';
+                    else enPiso.push(c);
+                } else {
+                    c.alpha -= dt / DESVANECER;
+                }
+            }
+            // si hay demasiadas en el piso, las más viejas empiezan a desvanecerse ya
+            for (let i = 0; i < enPiso.length - MAX_EN_PISO; i++) enPiso[i].estado = 'desv';
+            caidas = caidas.filter(c => c.alpha > 0);
+        }
+
+        function dibujarCaidas() {
+            for (const c of caidas) {
+                ctx.globalAlpha = Math.max(0, c.alpha);
+                ctx.save();
+                ctx.translate(c.x, c.y);
+                ctx.rotate(c.rot);
+                ctx.fillStyle = c.color;
+                corazon(0, 0, c.s);
+                ctx.restore();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        // =====================================================
+        //  TARJETAS DE CORAZÓN (globos) Y LA AVIONETA DE SNOOPY
+        // =====================================================
+        // Las tarjetas son HTML (para que el texto se vea nítido); la avioneta y la cuerda
+        // se dibujan en el canvas. Hay DOS tarjetas que se turnan: mientras una se
+        // desvanece, la otra llega colgada de la avioneta.
+        const HEART_PATH = 'M100 172 C 30 118, 6 82, 24 48 C 40 18, 80 14, 100 48 C 120 14, 160 18, 176 48 C 194 82, 170 118, 100 172 Z';
+        const HTML_CARTA =
+            '<svg viewBox="0 0 200 220" aria-hidden="true">' +
+              '<path d="M100 182 C 92 192, 108 200, 98 216" fill="none" stroke="#e3a0b6" stroke-width="1.6" stroke-linecap="round"/>' +
+              '<path d="M95 171 L105 171 L100 183 Z" fill="#f08fae"/>' +
+              '<path d="' + HEART_PATH + '" fill="url(#gGlobo)"/>' +
+              '<path d="' + HEART_PATH + '" fill="url(#gVolumen)"/>' +
+              '<path d="' + HEART_PATH + '" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="1.2"/>' +
+              '<ellipse cx="58" cy="52" rx="20" ry="9" transform="rotate(-32 58 52)" fill="#fff" opacity="0.6"/>' +
+              '<ellipse cx="38" cy="76" rx="3.5" ry="6" transform="rotate(-20 38 76)" fill="#fff" opacity="0.5"/>' +
+            '</svg>' +
+            '<div class="carta-texto"><span></span></div>';
+
+        function crearCarta() {
+            const el = document.createElement('div');
+            el.className = 'carta';
+            el.style.setProperty('--cw', cartaAncho + 'px');
+            el.innerHTML = HTML_CARTA;
+            document.body.appendChild(el);
+            return {
+                el: el, caja: el.querySelector('.carta-texto'), texto: el.querySelector('.carta-texto span'),
+                x: tx, y: ty, vx: 0, vy: 0, rot: 0, vrot: 0, esc: 1,
+                alfa: 0, txtAlfa: 0, modo: 'oculta', tLibre: 0, fase: 0
+            };
+        }
+        const cartaEls = [crearCarta(), crearCarta()];
+
+        // Escribe el mensaje y, si no cabe dentro del corazón, achica la letra hasta que quepa
+        function prepararCarta(c, mensaje) {
+            c.texto.textContent = mensaje;
+            let tam = cartaAncho * 0.075;
+            c.caja.style.fontSize = tam + 'px';
+            let seguro = 0;
+            while (c.texto.offsetHeight > c.caja.clientHeight && tam > 11 && seguro++ < 40) {
+                tam -= 1;
+                c.caja.style.fontSize = tam + 'px';
+            }
+            c.alfa = 0; c.txtAlfa = 0; c.tLibre = 0; c.rot = 0; c.vrot = 0;
+            c.fase = Math.random() * Math.PI * 2;
+        }
+
+        // Coloca la tarjeta en pantalla: (x, y) es el centro del corazón
+        function pintarCarta(c) {
+            if (c.alfa <= 0.002) {
+                if (c.el.style.opacity !== '0') c.el.style.opacity = '0';
+                return;
+            }
+            c.el.style.opacity = c.alfa.toFixed(3);
+            c.el.style.transform =
+                'translate(' + (c.x - cartaAncho / 2).toFixed(1) + 'px, ' + (c.y - CENTRO_Y * cartaAlto).toFixed(1) + 'px) ' +
+                'rotate(' + c.rot.toFixed(4) + 'rad) scale(' + c.esc.toFixed(4) + ')';
+            c.caja.style.opacity = c.txtAlfa.toFixed(3);
+            c.caja.style.transform = 'translateY(' + ((1 - c.txtAlfa) * 8).toFixed(1) + 'px)';
+        }
+
+        function mostrarBoton() {
+            btnSig.textContent = cartas.idx < CARTAS.length - 1 ? 'Siguiente ♥' : 'Volver al árbol ♥';
+            btnSig.classList.add('visible');
+            cartas.btnOn = true;
+        }
+        function ocultarBoton() {
+            btnSig.classList.remove('visible');
+            cartas.btnOn = false;
+        }
+
+        // Cuándo (en segundos del árbol) ya se puede tocar para abrir las tarjetas
+        function tListoCartas() {
+            return T_MSG + MENSAJE_LATERAL.length * 1.3 + 0.8;
+        }
+        function puedeIniciarCartas() {
+            return etapa === 3 && cartas.estado === 'inactivo' && tArbol > tListoCartas();
+        }
+
+        // Al terminar las tarjetas, Snoopy y Fifi se pueden tocar: eso abre el final
+        let parejaActiva = false;
+        function activarPareja() {
+            if (parejaActiva) return;
+            parejaActiva = true;
+            pareja.classList.add('activa');
+            const r = pareja.getBoundingClientRect();
+            pistaFinal.style.left = (r.left + r.width / 2) + 'px';
+            pistaFinal.style.top = Math.max(8, r.top - 6) + 'px';
+            pistaFinal.classList.add('visible');
+        }
+        pareja.addEventListener('click', function() {
+            if (!parejaActiva || cartas.estado !== 'inactivo') return;
+            parejaActiva = false;
+            pareja.classList.remove('activa');
+            pistaFinal.classList.remove('visible');
+            if (window.iniciarFinal) window.iniciarFinal();
+        });
+
+        function iniciarCartas() {
+            cartas.idx = 0;
+            const c = cartaEls[0];
+            prepararCarta(c, CARTAS[0]);
+            c.modo = 'libre'; c.x = tx; c.y = ty; c.vx = c.vy = 0; c.esc = 0.25;
+            cartas.actual = c;
+            cartas.saliente = null;
+            cartas.estado = 'entrando';
+            cartas.t = 0;
+            ocultarBoton();
+        }
+
+        // Botón "Siguiente": la tarjeta actual se desvanece y llega la avioneta con la siguiente
+        function siguienteCarta() {
+            if (cartas.estado !== 'visible') return;
+            ocultarBoton();
+            cartas.saliente = cartas.actual;
+            cartas.saliente.modo = 'saliendo';
+
+            if (cartas.idx < CARTAS.length - 1) {
+                cartas.idx++;
+                const c = cartaEls[cartas.idx % 2];
+                prepararCarta(c, CARTAS[cartas.idx]);
+                c.modo = 'remolque'; c.alfa = 1; c.esc = 1;
+
+                // la avioneta entra por la izquierda, y la tarjeta viene colgada detrás (todavía fuera de pantalla)
+                avion.activo = true; avion.soltada = false; avion.cuerdaFin = null; avion.carta = c;
+                avion.t = 0; avion.x = -avionAncho / 2 - 20; avion.y = avionY0; avion.rot = -0.07;
+                const A = puntoCola();
+                c.x = A.x - cuerdaX - 40;
+                c.y = A.y + cuerdaCaida + NOTCH * cartaAlto;
+                c.vx = avionVel; c.vy = 0; c.rot = 0.5; c.vrot = 0;
+
+                cartas.actual = c;
+                cartas.estado = 'vuelo';
+            } else {
+                cartas.actual = null;
+                cartas.estado = 'cerrando';
+            }
+            cartas.t = 0;
+        }
+        btnSig.addEventListener('click', siguienteCarta);
+
+        // ----- la avioneta -----
+        function actualizarAvion(dt) {
+            const av = avion;
+            av.t += dt;
+            av.x += avionVel * (1 + 0.04 * Math.sin(av.t * 2.1)) * dt;
+            av.y = avionY0 + Math.sin(av.t * 2.4) * canvas.height * 0.012;     // sube y baja suavemente
+            av.rot = -0.07 + Math.cos(av.t * 2.4) * 0.05;                      // nariz un poquito arriba, se inclina al subir/bajar
+            // cuando ya soltó la tarjeta y salió de la pantalla, se acaba
+            if (av.soltada && av.x - avionAncho / 2 > canvas.width + 30) av.activo = false;
+        }
+
+        // Dónde está la colita de la avioneta en la pantalla (ahí se amarra la cuerda)
+        function puntoCola() {
+            const lx = (AVION_COLA.x - 0.5) * avionAncho;
+            const ly = (AVION_COLA.y - 0.5) * avionAlto;
+            const co = Math.cos(avion.rot), si = Math.sin(avion.rot);
+            return { x: avion.x + lx * co - ly * si, y: avion.y + lx * si + ly * co };
+        }
+
+        // Dónde se ata la cuerda a la tarjeta: la muesca de arriba del corazón
+        function puntoAtado(c) {
+            const d = NOTCH * cartaAlto * c.esc;
+            return { x: c.x + Math.sin(c.rot) * d, y: c.y - Math.cos(c.rot) * d };
+        }
+
+        // La tarjeta colgada: sigue al punto de atrás de la avioneta con un resorte,
+        // así se atrasa, se balancea y reacciona a los vaivenes del avión.
+        function actualizarCartaRemolque(c, dt) {
+            const A = puntoCola();
+            const objX = A.x - cuerdaX;
+            const objY = A.y + cuerdaCaida + NOTCH * cartaAlto;
+            const K = 55, Cc = 9;
+            c.vx += (K * (objX - c.x) - Cc * c.vx) * dt;
+            c.vy += (K * (objY - c.y) - Cc * c.vy) * dt;
+            c.x += c.vx * dt;
+            c.y += c.vy * dt;
+            // la parte de arriba del corazón "mira" hacia donde jala la cuerda
+            const objRot = clamp(Math.atan2(A.x - c.x, c.y - A.y) * 0.25 + Math.sin(c.fase + avion.t * 3) * 0.05, -0.5, 0.5);
+            c.vrot += (40 * (objRot - c.rot) - 7 * c.vrot) * dt;
+            c.rot += c.vrot * dt;
+        }
+
+        // La tarjeta ya suelta (o ya quieta): un resorte la lleva a su lugar y luego flota como globo
+        function actualizarCartaLibre(c, dt) {
+            c.tLibre += dt;
+            const amp = clamp(c.tLibre / 1.5);   // el balanceo aparece poco a poco
+            const objX = tx + Math.sin(c.fase + c.tLibre * 1.1) * 4 * amp;
+            const objY = ty + Math.sin(c.fase + c.tLibre * 1.7) * 6 * amp;
+            const objR = Math.sin(c.fase + c.tLibre * 1.3) * 0.045 * amp;
+            const K = 38, Cc = 8.5;
+            c.vx += (K * (objX - c.x) - Cc * c.vx) * dt;
+            c.vy += (K * (objY - c.y) - Cc * c.vy) * dt;
+            c.x += c.vx * dt;
+            c.y += c.vy * dt;
+            c.vrot += (30 * (objR - c.rot) - 6 * c.vrot) * dt;
+            c.rot += c.vrot * dt;
+        }
+
+        function actualizarCartas(dt) {
+            const C = cartas;
+            C.t += dt;
+
+            // el mensajito lateral se va cuando empiezan las tarjetas y vuelve cuando terminan
+            C.lateral += ((C.estado === 'inactivo' ? 1 : 0) - C.lateral) * Math.min(1, dt * 3);
+
+            if (avion.activo) actualizarAvion(dt);
+
+            // la tarjeta anterior se desvanece flotando hacia arriba
+            const s = C.saliente;
+            if (s) {
+                s.alfa -= dt / 0.7;
+                s.y -= canvas.height * 0.03 * dt;
+                s.esc = Math.max(0.85, s.esc - 0.15 * dt);
+                s.txtAlfa = Math.min(s.txtAlfa, Math.max(0, s.alfa));
+                if (s.alfa <= 0) { s.alfa = 0; s.modo = 'oculta'; C.saliente = null; }
+            }
+
+            if (C.estado === 'entrando') {
+                // primera tarjeta: sube desde abajo creciendo, con un pequeño rebote
+                const c = C.actual;
+                const p = clamp(C.t / 1.3);
+                const e = easeOutBack(p);
+                c.x = tx;
+                c.y = ty + (1 - e) * canvas.height * 0.14;
+                c.esc = 0.25 + 0.75 * e;
+                c.alfa = clamp(p / 0.35);
+                c.rot = (1 - p) * -0.25;
+                c.txtAlfa = clamp((C.t - 0.8) / 0.7);
+                if (C.t >= 1.5) {
+                    c.vx = c.vy = c.vrot = 0; c.rot = 0; c.esc = 1; c.alfa = 1; c.txtAlfa = 1; c.tLibre = 0;
+                    C.estado = 'visible'; C.t = 0;
+                }
+            } else if (C.estado === 'vuelo') {
+                const c = C.actual;
+                if (c.modo === 'remolque') {
+                    actualizarCartaRemolque(c, dt);
+                    // llegó a su lugar: la avioneta la suelta (o se acabó el recorrido)
+                    if (c.x >= tx - 40 || !avion.activo) {
+                        c.modo = 'libre'; c.tLibre = 0;
+                        avion.soltada = true;
+                        const P = puntoAtado(c);
+                        avion.cuerdaFin = { x: P.x, y: P.y, alfa: 1 };
+                    }
+                } else {
+                    actualizarCartaLibre(c, dt);
+                    c.txtAlfa = clamp((c.tLibre - 0.5) / 0.9);      // el mensaje aparece al llegar
+                    if (c.txtAlfa >= 1) { C.estado = 'visible'; C.t = 0; }
+                }
+            } else if (C.estado === 'visible') {
+                actualizarCartaLibre(C.actual, dt);
+                if (C.t > 0.6 && !C.btnOn) mostrarBoton();
+            } else if (C.estado === 'cerrando') {
+                if (C.t > 0.9) { C.estado = 'inactivo'; C.t = 0; activarPareja(); }
+            }
+        }
+
+        function dibujarAvionYCuerda(dt) {
+            if (!avion.activo) return;
+            const A = puntoCola();
+            const c = avion.carta;
+            let P = null, alfa = 1;
+            if (!avion.soltada) {
+                P = puntoAtado(c);
+            } else if (avion.cuerdaFin) {
+                // ya soltó la tarjeta: el extremo de la cuerda se recoge hacia la avioneta y se desvanece
+                const f = avion.cuerdaFin;
+                f.x += (A.x - f.x) * Math.min(1, dt * 3);
+                f.y += (A.y - f.y) * Math.min(1, dt * 3);
+                f.alfa = Math.max(0, f.alfa - dt / 0.9);
+                P = f; alfa = f.alfa;
+            }
+            if (P && alfa > 0.01) {
+                const dist = Math.hypot(P.x - A.x, P.y - A.y);
+                const mx = (A.x + P.x) / 2;
+                const my = (A.y + P.y) / 2 + dist * 0.10 + Math.sin(avion.t * 5) * 3;   // la cuerda cuelga y se mueve
+                ctx.save();
+                ctx.globalAlpha = alfa;
+                ctx.strokeStyle = '#8b6a5c';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(A.x, A.y);
+                ctx.quadraticCurveTo(mx, my, P.x, P.y);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            // la avioneta, con una sombra discreta
+            ctx.save();
+            ctx.translate(avion.x, avion.y);
+            ctx.rotate(avion.rot);
+            ctx.shadowColor = 'rgba(150, 60, 90, 0.25)';
+            ctx.shadowBlur = 14;
+            ctx.shadowOffsetY = 8;
+            if (avionListo) {
+                ctx.drawImage(avionImg, -avionAncho / 2, -avionAlto / 2, avionAncho, avionAlto);
+            } else {
+                // por si todavía no carga snoopy_avion.png: una avioneta sencilla de respaldo
+                ctx.fillStyle = '#d6402f';
+                ctx.fillRect(-avionAncho / 2, -avionAlto * 0.1, avionAncho * 0.95, avionAlto * 0.3);
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, -avionAlto * 0.2, avionAlto * 0.18, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // =====================================================
+        //  EVENTOS
+        // =====================================================
+        canvas.addEventListener('pointerdown', function(ev) {
+            dedoActivo = true;
+            if (etapa === 0 && fase0 === 'mariposas') intentarAtrapar(ev.clientX, ev.clientY, performance.now());
+            if (etapa === 0 && arcoK > 0.9 && !flecha && Math.hypot(ev.clientX - bx, ev.clientY - by) < 110) {
+                jalando = true;
+            }
+            if (etapa === 3 && enZonaArbol(ev.clientX, ev.clientY)) {
+                tocarArbol(ev.clientX, ev.clientY);            // caen unas hojitas extra
+                if (puedeIniciarCartas()) iniciarCartas();     // y empiezan las tarjetas
+            }
+            dedo.x = ev.clientX;
+            dedo.y = ev.clientY;
+        });
+
+        window.addEventListener('pointermove', function(ev) {
+            dedoActivo = ev.pointerType !== 'touch';
+            dedo.x = ev.clientX;
+            dedo.y = ev.clientY;
+            if (etapa === 3) {
+                canvas.style.cursor = enZonaArbol(ev.clientX, ev.clientY) ? 'pointer' : 'default';
+            }
+        });
+
+        window.addEventListener('pointerup', function() {
+            if (jalando && fuerza > 30) {
+                flecha = { t: performance.now(), d0: fuerza };
+            }
+            jalando = false;
+        });
+
+        // =====================================================
+        //  BUCLE PRINCIPAL
+        // =====================================================
+        // =====================================================
+        //  CIELO CON NUBES (etapas 0, 1 y 2)
+        // =====================================================
+        const KP = clamp(canvas.height / 800, 0.7, 1.3);   // escala general según el tamaño de la pantalla
+        const KARCO = Math.min(KP * 0.7, canvas.width / 420);                            // ← tamaño del arco y la flecha (0.7)
+
+        const nubesCielo = [];
+        function puffsNube() {                        // una nube = 5 a 7 "bolitas" que se juntan
+            const k = 5 + Math.floor(Math.random() * 3), arr = [];
+            for (let i = 0; i < k; i++) {
+                const u = i / (k - 1), alt = Math.sin(Math.PI * u);
+                arr.push({ dx: -0.42 + 0.84 * u + (Math.random() - 0.5) * 0.06,
+                           dy: -0.02 - 0.12 * alt * Math.random(),
+                           r: 0.11 + 0.13 * alt * (0.7 + Math.random() * 0.5) });
+            }
+            return arr;
+        }
+        (function crearNubesCielo() {
+            const base = Math.max(canvas.width, canvas.height) * 0.9;
+            // [x, y, ancho, velocidad, tipo]  (x, y y ancho como fracción de la pantalla; 'c' = nube con forma de corazón)
+            [[0.50, 0.50, 0.26, 7, 'n'], [0.40, 0.56, 0.20, 5, 'n'], [0.62, 0.54, 0.22, 6, 'n'],
+             [0.15, 0.22, 0.20, 8, 'n'], [0.82, 0.20, 0.23, 6, 'n'], [0.06, 0.58, 0.18, 5, 'n'],
+             [0.92, 0.52, 0.19, 7, 'n'], [0.30, 0.09, 0.16, 9, 'n'], [0.70, 0.15, 0.15, 5, 'c']
+            ].forEach(function(n) {
+                nubesCielo.push({ x: canvas.width * n[0], y: canvas.height * n[1], w: n[2] * base, vel: n[3] * KP,
+                                  tipo: n[4], puffs: puffsNube() });
+            });
+        })();
+
+        function rutaNubeCielo(n, dy) {
+            const w = n.w;
+            ctx.beginPath();
+            for (const p of n.puffs) {
+                ctx.moveTo(p.dx * w + p.r * w, p.dy * w + dy);
+                ctx.arc(p.dx * w, p.dy * w + dy, p.r * w, 0, Math.PI * 2);
+            }
+            ctx.rect(-0.46 * w, -0.03 * w + dy, 0.92 * w, 0.13 * w);
+        }
+        function rutaCorazonNube(w, dy) {            // un corazón suave, sin bolitas
+            const k = w / 34;
+            ctx.beginPath();
+            for (let i = 0; i < 72; i++) {
+                const t = i / 72 * Math.PI * 2;
+                const x = 16 * Math.pow(Math.sin(t), 3) * k;
+                const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * k + dy;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+        }
+        // Cada nube se dibuja UNA vez en un lienzo pequeñito y luego solo se mueve ese dibujo
+        function dibujarNubeCielo(n) {
+            if (!n.sprite) {
+                n.sw = Math.ceil(n.w * 1.5); n.sh = Math.ceil(n.w * 1.4); n.sx = n.sw / 2; n.sy = n.w * 0.72;
+                const c = document.createElement('canvas');
+                c.width = n.sw; c.height = n.sh;
+                const prev = ctx; ctx = c.getContext('2d');
+                ctx.translate(n.sx, n.sy);
+                pintarNubeCielo(n);
+                ctx = prev; n.sprite = c;
+            }
+            ctx.drawImage(n.sprite, n.x - n.sx, n.y - n.sy);
+        }
+        function pintarNubeCielo(n) {
+            ctx.save();
+            if (n.tipo === 'c') {
+                ctx.fillStyle = 'rgba(255, 190, 215, 0.55)'; rutaCorazonNube(n.w, n.w * 0.035); ctx.fill();
+                const g = ctx.createLinearGradient(0, -n.w * 0.4, 0, n.w * 0.4);
+                g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#ffe6ef');
+                ctx.fillStyle = g; rutaCorazonNube(n.w, 0); ctx.fill();
+            } else {
+                ctx.fillStyle = 'rgba(150, 185, 225, 0.55)'; rutaNubeCielo(n, n.w * 0.035); ctx.fill();
+                const g = ctx.createLinearGradient(0, -n.w * 0.3, 0, n.w * 0.1);
+                g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#eaf4ff');
+                ctx.fillStyle = g; rutaNubeCielo(n, 0); ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // El cielo y el pasto no cambian: se dibujan una vez y se copian en cada cuadro
+        let cSky = null, cSuelo = null;
+        function lienzoReserva(fn) {
+            const c = document.createElement('canvas');
+            c.width = canvas.width; c.height = canvas.height;
+            const prev = ctx; ctx = c.getContext('2d');
+            fn();
+            ctx = prev;
+            return c;
+        }
+        function dibujarCielo(dt) {
+            if (!cSky) { cSky = lienzoReserva(pintarFondoCielo); cSuelo = lienzoReserva(pintarSuelo); }
+            const W = canvas.width;
+            ctx.drawImage(cSky, 0, 0);
+            // las nubes se mueven hacia la derecha y vuelven a entrar por la izquierda
+            nubesCielo.forEach(function(n) {
+                n.x += n.vel * dt;
+                if (n.x - n.w * 0.7 > W) n.x = -n.w * 0.7;
+                dibujarNubeCielo(n);
+            });
+            ctx.drawImage(cSuelo, 0, 0);
+        }
+        function pintarFondoCielo() {
+            const W = canvas.width, H = canvas.height;
+            const g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, '#62b6f2'); g.addColorStop(0.55, '#a8dbff'); g.addColorStop(1, '#e3f5ff');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+            // un solcito suave en la esquina
+            const sg = ctx.createRadialGradient(W * 0.12, H * 0.1, 0, W * 0.12, H * 0.1, H * 0.4);
+            sg.addColorStop(0, 'rgba(255, 246, 205, 0.9)'); sg.addColorStop(0.3, 'rgba(255, 246, 205, 0.35)');
+            sg.addColorStop(1, 'rgba(255, 246, 205, 0)');
+            ctx.fillStyle = sg;
+            ctx.fillRect(0, 0, W, H);
+        }
+        function pintarSuelo() {
+            const W = canvas.width, H = canvas.height;
+            // el pasto donde cae el corazón y crece el árbol (la parte de arriba está en "suelo")
+            ctx.fillStyle = '#b9eaa4';
+            ctx.beginPath(); ctx.ellipse(W * 0.2, H, W * 0.7, H * 0.17, 0, 0, Math.PI * 2); ctx.fill();
+            const gp = ctx.createLinearGradient(0, H * 0.88, 0, H);
+            gp.addColorStop(0, '#86d873'); gp.addColorStop(1, '#4fb350');
+            ctx.fillStyle = gp;
+            ctx.beginPath(); ctx.ellipse(W / 2, H, W * 0.8, H * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+            const cols = ['#ffe066', '#ffffff', '#ff8fb1', '#ffe066', '#c9a2ff'];
+            for (let i = 0; i < 26; i++) {              // florecitas del pasto (posiciones fijas)
+                const fx = W * ((i * 0.6180339) % 1);
+                const tope = H - H * 0.12 * Math.sqrt(Math.max(0, 1 - Math.pow((fx - W / 2) / (W * 0.8), 2)));
+                const fy = tope + (H - tope) * (0.25 + 0.6 * ((i * 0.37) % 1));
+                ctx.fillStyle = cols[i % cols.length];
+                ctx.beginPath(); ctx.arc(fx, fy, 3.2 * KP, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#f08c00';
+                ctx.beginPath(); ctx.arc(fx, fy, 1.2 * KP, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+
+        // =====================================================
+        //  MARIPOSAS LUCIÉRNAGA: vuelan por la pantalla y dan destellitos de luz
+        // =====================================================
+        const COLORES_MARIPOSA = [['#ff8fb1', '#ffd1e0'], ['#c77dff', '#ead2ff'], ['#ffb347', '#ffe2a8'],
+                                  ['#ffe066', '#fff3b8'], ['#6fb8ff', '#d3eeff'], ['#ff6b8b', '#ffc2d1'], ['#ffffff', '#ffe9f1']];
+        const mariposas = [];
+
+        // =====================================================
+        //  MINIJUEGO: atrapa las mariposas antes de poder usar el arco
+        // =====================================================
+        const META = 6;                 // ← cuántas mariposas hay que atrapar (la dorada vale 2)
+        let fase0 = 'mariposas';        // 'mariposas' → 'fin' → 'arco'
+        let puntos = 0, tFase = 0, tUltimaCaptura = 0, arcoK = 0, dedoActivo = false;
+        let dorada = null;
+        const vuelos = [], coloresCaptura = [], ondas = [];
+
+        function posCasilla(i) {
+            const sep = Math.min(40 * KP, (canvas.width - 40) / META);
+            return { x: canvas.width / 2 + (i - (META - 1) / 2) * sep, y: 62 * KP + 22 };
+        }
+        function nuevaMariposaBorde() {
+            const izq = Math.random() < 0.5;
+            return { x: izq ? -20 : canvas.width + 20, y: canvas.height * (0.1 + Math.random() * 0.6), vx: 0, vy: 0,
+                tx: Math.random() * canvas.width, ty: canvas.height * (0.1 + Math.random() * 0.7), tCambio: 2,
+                tam: (11 + Math.random() * 8) * KP, aleteo: 0, velAle: 11 + Math.random() * 5,
+                col: COLORES_MARIPOSA[Math.floor(Math.random() * COLORES_MARIPOSA.length)],
+                fase: Math.random() * 6.28, per: 3 + Math.random() * 4 };
+        }
+        function intentarAtrapar(x, y, now) {
+            let mejor = -1, md = 1e9;
+            mariposas.forEach(function(m, i) {
+                const d = Math.hypot(m.x - x, m.y - y);
+                if (d < m.tam * 2 + 28 && d < md) { md = d; mejor = i; }
+            });
+            if (mejor < 0) {                       // fallaste: ondita y corazoncitos
+                ondas.push({ x: x, y: y, t: now });
+                lanzarCorazones(x, y, 3);
+                return;
+            }
+            const m = mariposas.splice(mejor, 1)[0];
+            const valor = m.dorada ? 2 : 1;
+            if (m.dorada) dorada = null;
+            for (let k = 0; k < valor && puntos + k < META; k++) {
+                vuelos.push({ m: m, x0: m.x, y0: m.y, t: now + k * 150, dur: 750, idx: puntos + k, dorada: m.dorada });
+            }
+            puntos = Math.min(META, puntos + valor);
+            tUltimaCaptura = now;
+            lanzarCorazones(m.x, m.y, m.dorada ? 16 : 7);
+            mariposas.push(nuevaMariposaBorde());
+            if (!dorada && puntos >= 3 && puntos < META - 1 && Math.random() < 0.6) {
+                dorada = nuevaMariposaBorde();
+                dorada.dorada = true; dorada.col = ['#ffd23f', '#fff3b0']; dorada.vel = 1.8; dorada.per = 1.3; dorada.tam *= 1.25;
+                mariposas.push(dorada);
+            }
+            if (puntos >= META) { fase0 = 'fin'; tFase = now; }
+        }
+        function dibujarJuegoMariposas(now) {
+            const t = now / 1000, cx0 = canvas.width / 2;
+            // ondas por fallos
+            for (let i = ondas.length - 1; i >= 0; i--) {
+                const u = (now - ondas[i].t) / 600;
+                if (u >= 1) { ondas.splice(i, 1); continue; }
+                ctx.save(); ctx.globalAlpha = 0.6 * (1 - u); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(ondas[i].x, ondas[i].y, 8 + u * 34, 0, 6.283); ctx.stroke(); ctx.restore();
+            }
+            // pista si pasa mucho rato sin atrapar
+            if (fase0 === 'mariposas' && now - Math.max(tUltimaCaptura, 1500) > 9000 && mariposas.length) {
+                let m = mariposas[0];
+                const r = 20 + 6 * Math.sin(t * 6);
+                ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]);
+                ctx.beginPath(); ctx.arc(m.x, m.y, m.tam * 1.6 + r * 0.5, 0, 6.283); ctx.stroke(); ctx.restore();
+            }
+            // píldora superior con casillas
+            const sep = Math.min(40 * KP, (canvas.width - 40) / META), anchoP = Math.min(canvas.width - 16, Math.max(sep * META + 30, 310)), hP = 62 * KP + 36;
+            ctx.save();
+            ctx.globalAlpha = fase0 === 'arco' ? Math.max(0, 1 - arcoK) : 1;
+            ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.roundRect(cx0 - anchoP / 2, 10, anchoP, hP, 22); ctx.fill(); ctx.stroke();
+            ctx.font = '700 ' + clamp(canvas.width * 0.035, 17, 26) + 'px ' + FUENTE_TITULO;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(40,90,170,0.6)'; ctx.shadowBlur = 6; ctx.fillStyle = '#fff';
+            ctx.fillText('Atrapa las mariposas ✨', cx0, 10 + 22 * KP);
+            ctx.shadowBlur = 0;
+            for (let i = 0; i < META; i++) {
+                const p = posCasilla(i);
+                const lleno = !!coloresCaptura[i];
+                if (!lleno) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                    ctx.beginPath(); ctx.arc(p.x, p.y, 11 * KP, 0, 6.283); ctx.fill(); ctx.stroke();
+                } else {
+                    const c = coloresCaptura[i] || ['#ff8fb1', '#ffd1e0'];
+                    dibujarUna({ x: p.x, y: p.y, vx: 0, vy: -1, tam: 11 * KP, aleteo: t * 6 + i, col: c, fase: 0, per: 1, sinDestello: true }, t, 1);
+                }
+            }
+            ctx.restore();
+            // mariposas en vuelo hacia su casilla
+            for (let i = vuelos.length - 1; i >= 0; i--) {
+                const v = vuelos[i], u = (now - v.t) / v.dur;
+                if (u < 0) continue;
+                if (u >= 1) { coloresCaptura[v.idx] = v.m.col; vuelos.splice(i, 1); lanzarCorazones(posCasilla(v.idx).x, posCasilla(v.idx).y, 2); continue; }
+                const e = u * u * (3 - 2 * u), p = posCasilla(v.idx);
+                const x = v.x0 + (p.x - v.x0) * e, y = v.y0 + (p.y - v.y0) * e - Math.sin(u * Math.PI) * 60;
+                dibujarUna({ x: x, y: y, vx: p.x - v.x0, vy: p.y - v.y0, tam: v.m.tam + (11 * KP - v.m.tam) * e, aleteo: t * 20, col: v.m.col, fase: 0, per: 1, sinDestello: true }, t, 1);
+            }
+            // mensaje de victoria
+            if (fase0 === 'fin') {
+                const u = clamp((now - tFase) / 500);
+                ctx.save(); ctx.globalAlpha = u * (fase0 === 'fin' ? 1 : 0);
+                ctx.font = '700 ' + clamp(canvas.width * 0.06, 28, 54) + 'px ' + FUENTE_TITULO;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(40,90,170,0.7)'; ctx.shadowBlur = 12; ctx.fillStyle = '#fff';
+                ctx.fillText('¡Las atrapaste todas! ✨', cx0, canvas.height * 0.4);
+                ctx.restore();
+                if (now - tFase > 400 && Math.random() < 0.25) lanzarCorazones(cx0 + (Math.random() - 0.5) * sep * META, 62 * KP, 3);
+                if (now - tFase > 2000) fase0 = 'arco';
+            }
+            if (fase0 === 'arco' && arcoK < 1) arcoK = Math.min(1, arcoK + 0.016);
+        }
+        (function crearMariposas() {
+            const n = canvas.width < canvas.height ? 6 : 9;
+            for (let i = 0; i < n; i++) {
+                mariposas.push({
+                    x: Math.random() * canvas.width, y: canvas.height * (0.1 + Math.random() * 0.7),
+                    vx: 0, vy: 0, tx: Math.random() * canvas.width, ty: canvas.height * (0.1 + Math.random() * 0.7),
+                    tCambio: Math.random() * 3, tam: (11 + Math.random() * 8) * KP,
+                    aleteo: Math.random() * 6, velAle: 11 + Math.random() * 5,
+                    col: COLORES_MARIPOSA[i % COLORES_MARIPOSA.length],
+                    fase: Math.random() * 6.28, per: 3 + Math.random() * 4      // cada cuántos segundos destella
+                });
+            }
+        })();
+
+        function actualizarMariposas(dt, t) {
+            mariposas.forEach(function(m) {
+                m.tCambio -= dt;
+                if (m.tCambio <= 0) {                // elige un nuevo lugar al que volar
+                    m.tx = Math.random() * canvas.width;
+                    m.ty = canvas.height * (0.08 + Math.random() * 0.75);
+                    m.tCambio = 2 + Math.random() * 3;
+                }
+                const ang = Math.atan2(m.ty - m.y, m.tx - m.x), v = (38 + m.tam * 3) * (m.vel || 1);
+                const k = Math.min(1, dt * 1.2);
+                m.vx += (Math.cos(ang) * v - m.vx) * k;
+                m.vy += (Math.sin(ang) * v - m.vy) * k;
+                m.aleteo += dt * m.velAle;
+                if (fase0 === 'mariposas' && dedoActivo) {          // huyen un poquito del dedo
+                    const ddx = m.x - dedo.x, ddy = m.y - dedo.y, dd = Math.hypot(ddx, ddy);
+                    if (dd < 90 && dd > 1) { m.vx += ddx / dd * 260 * dt; m.vy += ddy / dd * 260 * dt; }
+                }
+                m.x += (m.vx + Math.sin(t * 3 + m.fase) * 22) * dt;     // el vuelo tembloroso de una mariposa
+                m.y += (m.vy + Math.cos(t * 2.3 + m.fase) * 26) * dt;
+            });
+        }
+
+        function estrella4(x, y, r) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.22, y - r * 0.22); ctx.lineTo(x + r, y);
+            ctx.lineTo(x + r * 0.22, y + r * 0.22); ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.22, y + r * 0.22);
+            ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.22, y - r * 0.22);
+            ctx.closePath(); ctx.fill();
+        }
+
+        function dibujarMariposas(t, alfa) {
+            mariposas.forEach(function(m) { dibujarUna(m, t, alfa); });
+        }
+
+        function dibujarUna(m, t, alfa) {
+            (function() {
+                const T = m.tam;
+                // destello corto y brillante, como el de una luciérnaga
+                const f = m.sinDestello ? 0 : Math.pow(Math.max(0, Math.sin(t * (Math.PI * 2 / m.per) + m.fase)), 8);
+                ctx.save();
+                ctx.globalAlpha = alfa;
+                ctx.translate(m.x, m.y);
+                if (f > 0.02) {
+                    const r = T * (2.2 + 2.4 * f);
+                    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+                    g.addColorStop(0, 'rgba(255, 252, 215, ' + (0.9 * f) + ')');
+                    g.addColorStop(0.4, 'rgba(255, 236, 160, ' + (0.45 * f) + ')');
+                    g.addColorStop(1, 'rgba(255, 230, 150, 0)');
+                    ctx.fillStyle = g;
+                    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = 'rgba(255, 255, 255, ' + f + ')';
+                    estrella4(0, 0, T * 1.5 * f);
+                    for (let j = 0; j < 3; j++) {         // chispitas alrededor
+                        const aj = t * 2 + j * 2.1 + m.fase;
+                        estrella4(Math.cos(aj) * T * 1.7, Math.sin(aj) * T * 1.7, T * 0.28 * f);
+                    }
+                }
+                ctx.rotate(Math.atan2(m.vy, m.vx) + Math.PI / 2 + Math.sin(t * 2 + m.fase) * 0.15);
+                const w = Math.abs(Math.cos(m.aleteo)) * 0.85 + 0.15;     // el aleteo: las alas se cierran y se abren
+                [1, -1].forEach(function(lado) {
+                    ctx.save();
+                    ctx.scale(lado * w, 1);
+                    ctx.fillStyle = m.col[0];
+                    ctx.strokeStyle = 'rgba(110, 40, 80, 0.4)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.ellipse(T * 0.55, -T * 0.35, T * 0.62, T * 0.5, 0.55, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = m.col[1];
+                    ctx.beginPath(); ctx.ellipse(T * 0.42, T * 0.42, T * 0.42, T * 0.34, -0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+                    ctx.beginPath(); ctx.arc(T * 0.62, -T * 0.4, T * 0.13, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                });
+                ctx.fillStyle = '#5a2a3a';
+                ctx.beginPath(); ctx.ellipse(0, 0, T * 0.09, T * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#5a2a3a'; ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, -T * 0.45); ctx.lineTo(T * 0.22, -T * 0.95);
+                ctx.moveTo(0, -T * 0.45); ctx.lineTo(-T * 0.22, -T * 0.95);
+                ctx.stroke();
+                ctx.restore();
+            })();
+        }
+
+        // =====================================================
+        //  ARCO Y FLECHA (estilo caricatura: contorno oscuro, rojo brillante)
+        // =====================================================
+        const TINTA = '#7a1c2a';
+        const LARGO_FLECHA = 135;     // en unidades del arco (se multiplica por KP al dibujar)
+
+        function trazoArco() {                 // coordenadas locales: +x = hacia donde apunta la flecha
+            ctx.beginPath();
+            ctx.moveTo(2, -92);
+            ctx.quadraticCurveTo(-12, -88, -4, -80);       // puntita curva de arriba
+            ctx.bezierCurveTo(40, -46, 40, 46, -4, 80);    // el cuerpo del arco
+            ctx.quadraticCurveTo(-12, 88, 2, 92);          // puntita curva de abajo
+        }
+
+        // Dibuja una flecha con la cola en x0 y el largo len (hacia +x). conPunta = false para la flecha ya clavada.
+        function flechaGrafica(x0, len, conPunta) {
+            const xT = x0 + len;
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.strokeStyle = TINTA; ctx.lineWidth = 7;                 // el palito: contorno y madera clarita
+            ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(xT - 8, 0); ctx.stroke();
+            ctx.strokeStyle = '#f6dfb4'; ctx.lineWidth = 3.6;
+            ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(xT - 8, 0); ctx.stroke();
+            [-1, 1].forEach(function(lado) {                            // plumas rojas
+                ctx.fillStyle = '#e63946'; ctx.strokeStyle = TINTA; ctx.lineWidth = 2.2;
+                ctx.beginPath();
+                ctx.moveTo(x0 - 8, lado * 14); ctx.lineTo(x0 + 8, lado * 14);
+                ctx.lineTo(x0 + 32, lado * 2); ctx.lineTo(x0 + 16, lado * 2);
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.strokeStyle = '#ff9a9a'; ctx.lineWidth = 1.4;
+                ctx.beginPath();
+                ctx.moveTo(x0 + 1, lado * 12); ctx.lineTo(x0 + 18, lado * 3);
+                ctx.moveTo(x0 + 7, lado * 12); ctx.lineTo(x0 + 24, lado * 3);
+                ctx.stroke();
+            });
+            if (conPunta) {                                             // punta gris con brillo
+                ctx.fillStyle = '#dfe3ea'; ctx.strokeStyle = TINTA; ctx.lineWidth = 2.4;
+                ctx.beginPath();
+                ctx.moveTo(xT, 0); ctx.lineTo(xT - 28, -16); ctx.lineTo(xT - 20, 0); ctx.lineTo(xT - 28, 16);
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.beginPath();
+                ctx.moveTo(xT - 3, -1); ctx.lineTo(xT - 20, -10); ctx.lineTo(xT - 15, -1);
+                ctx.closePath(); ctx.fill();
+            }
+        }
+
+        function dibujarArco(now, alfa) {
+            ctx.save();
+            ctx.globalAlpha = alfa;
+            ctx.translate(bx, by);
+            ctx.rotate(a);
+            ctx.scale(KARCO, KARCO);
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+            // cuanto se jala la cuerda (con un temblorcito al soltar)
+            let pull = 0;
+            if (jalando) pull = Math.min(80, Math.hypot(dedo.x - bx, dedo.y - by));
+            fuerza = pull;
+            let nock = -pull * 0.6 / KARCO;
+            if (flecha) {
+                const el = (now - flecha.t) / 1000;
+                nock = Math.exp(-el * 9) * Math.sin(el * 70) * flecha.d0 * 0.15 / KARCO;
+            }
+
+            ctx.strokeStyle = TINTA; ctx.lineWidth = 2.4;               // la cuerda
+            ctx.beginPath(); ctx.moveTo(2, -92); ctx.lineTo(nock, 0); ctx.lineTo(2, 92); ctx.stroke();
+
+            trazoArco(); ctx.strokeStyle = TINTA; ctx.lineWidth = 17; ctx.stroke();        // contorno
+            trazoArco(); ctx.strokeStyle = '#e63946'; ctx.lineWidth = 12; ctx.stroke();     // rojo
+            ctx.save();                                                                    // brillo
+            ctx.setLineDash([16, 12, 6, 14]); ctx.translate(-2.5, -1.5);
+            trazoArco(); ctx.strokeStyle = 'rgba(255, 150, 150, 0.9)'; ctx.lineWidth = 3; ctx.stroke();
+            ctx.restore();
+            ctx.strokeStyle = TINTA; ctx.lineWidth = 16;                                   // empuñadura
+            ctx.beginPath(); ctx.moveTo(29, -12); ctx.lineTo(29, 12); ctx.stroke();
+            ctx.strokeStyle = '#b3202f'; ctx.lineWidth = 11;
+            ctx.beginPath(); ctx.moveTo(29, -12); ctx.lineTo(29, 12); ctx.stroke();
+
+            if (!flecha) flechaGrafica(nock, LARGO_FLECHA, true);          // la flecha lista en la cuerda
+            ctx.restore();
+        }
+
+        // La flecha ya volando hacia el corazón (la punta va en (px, py))
+        function dibujarFlechaVolando(px, py) {
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(a);
+            ctx.scale(KARCO, KARCO);
+            flechaGrafica(-LARGO_FLECHA, LARGO_FLECHA, true);
+            ctx.restore();
+        }
+
+        // Halo con chispitas alrededor del corazón mientras espera en el cielo
+        function dibujarAureola(x, y, s, now, k) {
+            if (k < 0.02) return;
+            const t = now / 1000;
+            const r = s * (3 + 0.3 * Math.sin(t * 2));
+            const g = ctx.createRadialGradient(x, y, s * 0.3, x, y, r);
+            g.addColorStop(0, 'rgba(255, 255, 255, ' + (0.6 * k) + ')');
+            g.addColorStop(0.5, 'rgba(255, 220, 235, ' + (0.25 * k) + ')');
+            g.addColorStop(1, 'rgba(255, 220, 235, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            for (let j = 0; j < 6; j++) {
+                const ang = j * 1.05 + t * 0.4 * (j % 2 ? 1 : -1);
+                const dist = s * (1.8 + 0.3 * Math.sin(t * 1.1 + j * 1.7));
+                const tw = 0.5 + 0.5 * Math.sin(t * 3 + j * 2.3);
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.9 * tw * k) + ')';
+                estrella4(x + Math.cos(ang) * dist, y + Math.sin(ang) * dist * 0.85, s * (0.1 + 0.1 * tw));
+            }
+        }
+
+        let bobK = 1, aureolaK = 1;
+
+        // =====================================================
+        //  BUCLE PRINCIPAL
+        // =====================================================
+        function frame(now) {
+            if (window.pausaPrincipal) { ultimo = now; requestAnimationFrame(frame); return; }
+            const dt = Math.min((now - ultimo) / 1000, 0.05);
+            ultimo = now;
+
+            if (etapa <= 2) {
+                // 1 y 2. cielo con nubes y pasto (el corazón vive entre las nubes)
+                dibujarCielo(dt);
+            } else {
+                // 1. fondo
+                ctx.fillStyle = fondo;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // 2. montículo (el piso donde cae el corazón y crece el árbol)
+                ctx.fillStyle = '#ffc9c9';
+                ctx.beginPath();
+                ctx.ellipse(canvas.width / 2, canvas.height, canvas.width * 0.8, canvas.height * 0.12, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 2b. globos de corazón de fondo: empiezan cuando el árbol ya está formado
+            if (etapa === 3 && tArbol > T_GLOBOS) {
+                actualizarGlobos(dt);
+                dibujarGlobos();
+            }
+
+            // barras negras: crecen con la onda (etapa 2) y se retiran al desvanecerse (etapa 3)
+            if (etapa === 2) barraPx = canvas.height * BARRA * (1 - Math.pow(1 - clamp((now - tEtapa) / 1000 / DURACION_ONDA), 3));
+            else if (etapa === 3) barraPx = canvas.height * BARRA * Math.max(0, 1 - (now - tEtapa) / 1000 / 1.5);
+            else barraPx = 0;
+
+            // 3. etapa 3: se desvanece la onda, crece el árbol, caen las hojas y se abren las tarjetas
+            let t3 = 0;
+            if (etapa === 3) {
+                t3 = (now - tEtapa) / 1000;
+                tArbol = t3 - 1;     // el árbol empieza 1 s después de que empieza el desvanecido
+
+                // la onda y el texto se vuelven transparentes (antes del árbol, para quedar detrás)
+                const alpha = Math.max(0, 1 - t3 / 1.5);
+                if (alpha > 0) {
+                    dibujarOnda(1, alpha);
+                    dibujarMensaje(999, alpha);
+                }
+                dibujarBarras();
+
+                if (tArbol > 0) {
+                    actualizarHojas(dt);
+                    actualizarCaidas(dt);
+                    dibujarArbol(now);
+                    dibujarCaidas();
+                    actualizarCartas(dt);
+                    dibujarAvionYCuerda(dt);
+                    cartaEls.forEach(pintarCarta);
+                    if (tArbol > 0.4) pareja.style.opacity = '1';
+                    dibujarMensajeLateral(now);
+                }
+            }
+
+            // 4. física del corazón
+            if (etapa === 1) {
+                actualizarCorazon(dt, now);
+                actualizarSquash(dt);
+            }
+
+            // 5. nebulosa + corazón (late en la etapa 0; en la etapa 3 se encoge como semilla)
+            let s = cor.s * cor.infl;
+            if (etapa === 0) s = 60 * (1 + 0.06 * Math.sin(now / 260));
+            if (etapa === 3) {
+                s = cor.s * cor.infl * Math.max(0, 1 - t3 / 1.2);
+                cor.x += (cx - cor.x) * Math.min(1, dt * 4);   // por si cayó unos px lejos del tronco
+            }
+
+            // el brillo aparece con el flechazo, se mantiene mientras cae y se apaga al explotar
+            const objBrillo = etapa === 0 ? (flechaClavada ? 1 : 0) : (etapa === 1 ? 0.9 : 0);
+            brillo += (objBrillo - brillo) * Math.min(1, dt * (objBrillo > brillo ? 8 : 4));
+            // en el cielo el corazón flota suavecito; al disparar se queda quieto
+            bobK += (((etapa === 0 && !flecha && !flechaClavada) ? 1 : 0) - bobK) * Math.min(1, dt * 10);
+            const bob = Math.sin(now / 650) * 5 * KP * bobK;
+            aureolaK += (((etapa === 0 && !flechaClavada) ? 1 : 0) - aureolaK) * Math.min(1, dt * 5);
+            dibujarAureola(cor.x, cor.y + bob, s, now, aureolaK);
+            dibujarNebulosa(cor.x, cor.y + bob, s, brillo, now);
+
+            if (s > 0.5) {
+                ctx.save();
+                ctx.translate(0, bob);
+                // la compresión se apoya en la punta del corazón, que es la que toca el piso
+                const base = s * 0.9;
+                const estira = etapa === 1 && !cor.asentado ? clamp(Math.abs(cor.vy) / (canvas.height * 8), 0, 0.12) : 0;
+                ctx.translate(cor.x, cor.y + base);
+                ctx.scale(1 + cor.sq * 0.75 - estira * 0.6, 1 - cor.sq + estira);
+                ctx.translate(0, -base);
+                ctx.rotate(cor.rot);
+                const gc = ctx.createRadialGradient(-s * 0.35, -s * 0.45, s * 0.05, 0, 0, s * 1.3);
+                gc.addColorStop(0, '#ffa6c0'); gc.addColorStop(0.45, '#ff4f7e'); gc.addColorStop(1, '#d92f63');
+                ctx.fillStyle = gc;
+                corazon(0, 0, s);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';          // borde de luz
+                ctx.lineWidth = Math.max(2, s * 0.04);
+                ctx.stroke();
+                ctx.save();                                              // brillo de globo
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.translate(-s * 0.5, -s * 0.4); ctx.rotate(-0.55);
+                ctx.beginPath(); ctx.ellipse(0, 0, s * 0.26, s * 0.11, 0, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+                if (flechaClavada && etapa < 3) {                        // la flecha clavada
+                    ctx.rotate(a);
+                    ctx.scale(KARCO * 0.8, KARCO * 0.8);
+                    flechaGrafica(-100, 100, false);
+                }
+                ctx.restore();
+            }
+
+            // 5b. mariposas luciérnaga (mientras se ve el cielo)
+            if (etapa <= 2) {
+                actualizarMariposas(dt, now / 1000);
+                dibujarMariposas(now / 1000, 1);
+                if (etapa === 0) dibujarJuegoMariposas(now);
+            }
+
+            // 6. arco y flecha (se juega en la etapa 0; el arco se desvanece justo después del flechazo)
+            if (etapa === 0 || (etapa === 1 && (now - tEtapa) < 900)) {
+                dibujarArco(now, etapa === 0 ? arcoK : 1 - (now - tEtapa) / 900);
+            }
+            if (etapa === 0) {
+                // una pista para que se sepa qué hacer (solo antes del primer disparo)
+                if (!flecha && !flechaClavada && arcoK > 0.9) {
+                    const a0 = clamp((now / 1000 - 1.5) / 1.5) * (jalando ? 0 : 0.8 + 0.2 * Math.sin(now / 300));
+                    if (a0 > 0.01) {
+                        const tam = clamp(canvas.width * 0.03, 20, 30);
+                        ctx.font = '700 ' + tam + 'px ' + FUENTE_TITULO;
+                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                        const txt = 'Jala el arco y suelta ♥';
+                        const wt = ctx.measureText(txt).width;
+                        const px = clamp(bx, wt / 2 + 10, canvas.width - wt / 2 - 10);
+                        ctx.globalAlpha = a0;
+                        ctx.shadowColor = 'rgba(40, 90, 170, 0.6)'; ctx.shadowBlur = 8;
+                        ctx.fillStyle = '#fff';
+                        ctx.fillText(txt, px, by + 112 * KP);
+                        ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+                    }
+                }
+
+                if (flecha) {
+                    // la flecha vuela en línea recta: la punta va de donde estaba en la cuerda hasta el centro del corazón
+                    const u = Math.min((now - flecha.t) / 550, 1);
+                    const largo = LARGO_FLECHA * KARCO - flecha.d0 * 0.6;
+                    const sx0 = bx + dx * largo, sy0 = by + dy * largo;
+                    dibujarFlechaVolando(sx0 + (hx - sx0) * u, sy0 + (hy - sy0) * u);
+
+                    if (u >= 1) {
+                        // ¡impacto! El empujón horizontal se calcula para que el corazón
+                        // termine de rebotar justo en la base del árbol (cx).
+                        flecha = null;
+                        flechaClavada = true;
+                        cor.vx = (cx - hx) / desplazamientoPorUnidadDeVx();
+                        cor.vy = EMPUJE_VY;
+                        cor.vrot = 4;
+                        brillo = 1.7;                      // destello de la nebulosa
+                        lanzarCorazones(hx, hy, 14);       // corazoncitos saltando desde el punto de impacto
+                        cambiarEtapa(1, now);
+                    }
+                }
+            }
+
+            // 7. onda rosa + mensaje + Snoopy
+            if (etapa === 2) {
+                const t = (now - tEtapa) / 1000;
+                dibujarOnda(Math.min(t / DURACION_ONDA, 1), 1);
+                dibujarMensaje(t, 1);
+                dibujarBarras();
+
+                if (t > T_GIF) snoopy.style.opacity = '1';
+
+                if (t > T_GIF + PAUSA_MENSAJE) {
+                    snoopy.style.opacity = '0';
+                    crearArbol();
+                    cambiarEtapa(3, now);
+                }
+            }
+
+            // 8. corazoncitos de las explosiones (van encima de todo lo del canvas)
+            actualizarParticulas(dt);
+            dibujarParticulas();
+
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    </script>
+
+    <!-- BIENVENIDA: va encima de la animación y desaparece al presionar OK -->
+    <div id="bienvenida">
+        <canvas id="cb"></canvas>
+        <div id="holaAvion"><div class="bob"><div class="cuerda"></div><div class="cartel"></div><img src="snoopy_avion.png" alt=""></div></div>
+        <div id="final">
+            <img id="besoImg" src="beso.png" alt="Snoopy y Fifi">
+            <div id="panelMsg"><div id="mensajeFinal"></div></div>
+        </div>
+        <div id="invitacion">
+            <div id="pregunta"><span></span></div>
+            <button id="btnOk" type="button">OK</button>
+        </div>
+    </div>
+    <div id="cortina"></div>
+    <script>
+    (function() {
+        const canvas = document.getElementById('cb');
+        let ctx = canvas.getContext('2d');          // (let: para poder dibujar un momento en un lienzo de reserva)
+        const bienvenida = document.getElementById('bienvenida');
+        const invitacion = document.getElementById('invitacion');
+        const finalEl = document.getElementById('final');
+        const mensajeEl = document.getElementById('mensajeFinal');
+        const preguntaEl = document.getElementById('pregunta');
+        const preguntaTxt = preguntaEl.querySelector('span');
+        const btnOk = document.getElementById('btnOk');
+        const cortina = document.getElementById('cortina');
+
+        // =====================================================
+        //  AJUSTES: aquí puedes cambiar textos y colores
+        // =====================================================
+        const PREGUNTA = '¿Quieres ver lo que preparé para ti?';
+        const TEXTO_BOTON = 'OK';
+        const PISTA = 'Pasa el dedo por las flores… hay algo escondido';   // se deja vacío ('') para quitarla
+        const PISTA_TOCAR = 'Tócalo ♥';                         // aparece cuando ya lo encontró
+                const MENSAJE_FINAL = [
+            'Mi amor, quiero que sepas cuánto te amo. Cada día que pasa me enamoro muchísimo más de ti. Me encanta absolutamente todo de ti: tu sonrisa, tus ojitos, tu pelito, tu carita hermosa, tu risa que tanto me cautiva y tu voz, que para mí es como el canto de los ángeles. No tienes idea de lo feliz que me hace simplemente tenerte en mi vida.',
+            'Muchas veces me quedo observándote y admirándote, me encanta ver tu belleza, tu forma de ser, cómo me hablas y hasta los pequeños detalles que te hacen ser tú. Y en esos momentos pienso en la enorme suerte que tengo de tener a alguien tan maravillosa como tú a mi lado. 🥺💖',
+            'Me haces inmensamente feliz con cada besito, con tus abrazos llenos de ternura, con tus palabras y con cada muestra de cariño. Eres mi refugio, mi lugar seguro y una de las razones más bonitas de mi felicidad. Si algo tengo claro es que lo único que quiero es hacerte muy feliz, cuidarte, amarte y demostrarte de todas las maneras posibles lo importante que eres para mí.',
+            'Hice esto con muchísimo cariño para que nunca olvides cuánto te amo y lo especial que eres para mí. Sé que te gusta muchísimo Snoopy y por eso quise ponerlo, porque tú y yo somos Snoopy y Fifi. Y así como ellos, quiero que sigamos compartiendo muchísimos momentos bonitos juntos.',
+            'Te amo muchísimoooo, mi niña hermosa. Nunca dudes de lo enamorado que estoy de ti. Eres una personita maravillosa y me siento muy afortunado de poder llamarte mi novia. 💗🥺'
+        ];
+        const VEL_MENSAJE = 16;     // qué tan rápido se desplaza el mensaje (píxeles por segundo)
+        const IMAGEN_RECOSTADO = 'recostado.png';                // opcional: imagen de quien descansa al pie del árbol
+        const FUENTE = '"Dancing Script", "Segoe Script", "Snell Roundhand", "Brush Script MT", cursive';
+
+        // Flores: la primera (amarilla) es la más común; las demás aparecen "de vez en cuando"
+        const FLORES = [
+            { petalo: '#ffd93b', centro: '#f08c00' },   // amarilla
+            { petalo: '#ff8fb1', centro: '#fff0a0' },   // rosa
+            { petalo: '#ffffff', centro: '#ffcf3a' },   // blanca
+            { petalo: '#c49bf5', centro: '#fff3b0' },   // morada
+            { petalo: '#ff5a6e', centro: '#ffe27a' },   // roja
+            { petalo: '#8ec5ff', centro: '#fff3b0' },   // azul
+            { petalo: '#ffb36b', centro: '#7a4a1f' }    // naranja
+        ];
+
+        btnOk.textContent = TEXTO_BOTON;
+        MENSAJE_FINAL.forEach(function(t, i) {
+            const p = document.createElement('p');
+            if (i === MENSAJE_FINAL.length - 1) p.className = 'firma';
+            p.textContent = t;
+            mensajeEl.appendChild(p);
+        });
+        preguntaTxt.textContent = PREGUNTA;
+        if (document.fonts && document.fonts.load) {
+            document.fonts.load('700 40px "Dancing Script"').catch(function() {});
+        }
+
+        // =====================================================
+        //  UTILIDADES
+        // =====================================================
+        const clamp = (v, a = 0, b = 1) => Math.min(Math.max(v, a), b);
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const easeInOut = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+        function easeOutBack(p) {
+            const c1 = 1.70158, c3 = c1 + 1;
+            return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+        }
+        // Un "azar" con semilla: da siempre los mismos números, así el campo se ve igual cada vez
+        function semilla(a) {
+            return function() {
+                a |= 0; a = a + 0x6D2B79F5 | 0;
+                let t = Math.imul(a ^ a >>> 15, 1 | a);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+
+        // =====================================================
+        //  MEDIDAS DE LA PANTALLA (se recalculan si giras el celular)
+        // =====================================================
+        let W, H, dpr, vertical;
+        let horizonte;          // altura donde empieza el pasto lejano
+        let hx, hy, sH;         // corazón escondido: posición y tamaño
+        let sGrande, cenX, cenY;// corazón grande de la invitación
+        let arbolX, arbolBase, arbolAlto;
+
+        // ---- BARRER EL CAMPO: al pasar el dedo o el mouse, TODAS las flores cercanas se mueven como si pasaras corriendo ----
+        const PROGRESO_PARA_ENCONTRAR = 0.45;   // ← cuánto hay que mover las flores cerca del corazón para que aparezca (0 a 1)
+        const AGITACION_FUERZA = 20;            // ← cuántos píxeles se mueven las flores al pasar (más = más movimiento)
+        const AGITACION_RADIO = 2.6;            // ← qué tan ancho es el "barrido" (en tamaños de corazón)
+        const CW = 4, PASO_FILA = 14;           // tamaño de cada trocito de campo (delgadito, para que no se note la división)
+        let descubierto = false, progresoBarrido = 0, revK = 0, recorrido = 0;
+        let bR = null, ag = null, dr = null, vistas = null, bCols = 1, bFilas = 1, bFila0 = 0;
+        let celdasTotal = 1, celdasMarcadas = 0, bRad = 60, ultPunto = null;
+
+        function prepararBarrido() {
+            bR = { x: 0, y: y0Campo, w: W, h: H - y0Campo };       // el barrido vale en TODO el campo
+            bRad = Math.max(sH * AGITACION_RADIO, 60);
+            bCols = Math.ceil(W / CW);
+            bFila0 = 0;
+            bFilas = Math.ceil((H - y0Campo) / PASO_FILA);
+            ag = new Float32Array(bCols * bFilas); dr = new Float32Array(bCols * bFilas); vistas = new Uint8Array(bCols * bFilas);
+            celdasTotal = 0; celdasMarcadas = 0;
+            for (let j = 0; j < bFilas; j++) for (let i = 0; i < bCols; i += 3) {
+                if (Math.hypot((i + 0.5) * CW - hx, y0Campo + (j + 0.5) * PASO_FILA - hy) < sH * 3.5) celdasTotal++;
+            }
+            progresoBarrido = descubierto ? 1 : 0;
+        }
+
+        function pasar(x, y, dirx) {            // agita las flores alrededor de (x, y)
+            const R = bRad * 1.5;
+            const i0 = Math.max(0, Math.floor((x - R) / CW)), i1 = Math.min(bCols - 1, Math.ceil((x + R) / CW));
+            const j0 = Math.max(0, Math.floor((y - R - y0Campo) / PASO_FILA)), j1 = Math.min(bFilas - 1, Math.ceil((y + R - y0Campo) / PASO_FILA));
+            for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+                const cx = (i + 0.5) * CW, cy = y0Campo + (j + 0.5) * PASO_FILA;
+                const d = Math.hypot(cx - x, (cy - y) * 1.4);
+                if (d > R) continue;
+                const k = j * bCols + i, u = 1 - d / R, f = u * u * (3 - 2 * u);     // se apaga suavecito hacia los lados
+                if (f > ag[k]) ag[k] = f;
+                dr[k] += (dirx - dr[k]) * 0.5;
+                if (d < bRad && !vistas[k] && Math.hypot(cx - hx, cy - hy) < sH * 3.5 && i % 3 === 0) { vistas[k] = 1; celdasMarcadas++; }
+            }
+        }
+
+        function barrer(x, y) {
+            if (!bR || estado !== 'escena') return;
+            if (y < y0Campo - bRad || y > H + bRad) { ultPunto = null; return; }
+            if (ultPunto) {
+                const dxm = x - ultPunto.x, d = Math.hypot(dxm, y - ultPunto.y), n = Math.max(1, Math.ceil(d / (bRad * 0.5)));
+                const dirx = d > 0.5 ? clamp(dxm / d, -1, 1) : 0;
+                recorrido += d;
+                for (let i = 1; i <= n; i++) pasar(ultPunto.x + (x - ultPunto.x) * i / n, ultPunto.y + (y - ultPunto.y) * i / n, dirx);
+            } else pasar(x, y, 0);
+            ultPunto = { x: x, y: y };
+            // aparece al mover las flores cerca del corazón (o, si se juega por otro lado, tras mover bastante el campo)
+            progresoBarrido = Math.max(celdasMarcadas / celdasTotal, recorrido / (W * 6));
+            if (!descubierto && progresoBarrido >= PROGRESO_PARA_ENCONTRAR) {
+                descubierto = true;
+                for (let i = 0; i < 14; i++) chispas.push({ x: hx + (Math.random() - 0.5) * sH * 3, y: hy + (Math.random() - 0.2) * sH,
+                    t: 0, vida: 1.4 + Math.random() * 1.2, fase: Math.random() * 6, s: sH * (0.14 + Math.random() * 0.12) });
+            }
+        }
+
+        function actualizarAgitacion(dt) {
+            if (!ag) return;
+            const f = Math.exp(-dt * 1.1);       // se calman poco a poco, volviendo al viento natural
+            for (let k = 0; k < ag.length; k++) { if (ag[k] > 0.004) ag[k] *= f; else ag[k] = 0; }
+        }
+
+        // Dibuja una capa del campo; donde se pasó, cada trocito delgado se mueve un poco más (suave, sin deformar)
+        function dibujarCapaAgitada(capa, t, k) {
+            ctx.save();
+            ctx.beginPath(); ctx.rect(bR.x, bR.y, bR.w, bR.h); ctx.clip();
+            for (let j = 0; j < bFilas; j++) {
+                const y = j * PASO_FILA, dy = y0Campo + y;
+                const hh = Math.min(PASO_FILA + 1, H - dy);
+                if (hh <= 0) break;
+                const prof = clamp((dy - horizonte) / (H - horizonte));
+                const off = (Math.sin(t * 1.3 + dy * 0.02) * (0.8 + 2.4 * prof) + Math.sin(t * 0.7 + y * 0.05) * 0.5) * (H / 800);
+                const sy = Math.round(y * dpr), sh = Math.min(Math.round(hh * dpr), capa.height - sy);
+                if (sh <= 0) break;
+                const base = j * bCols;
+                let i = 0;
+                while (i < bCols) {
+                    if (ag[base + i] <= 0.01) {                // trocitos tranquilos: se dibujan juntos, de un solo golpe
+                        let n = 1;
+                        while (i + n < bCols && ag[base + i + n] <= 0.01) n++;
+                        const dx = i * CW;
+                        ctx.drawImage(capa, (dx - off) * dpr, sy, n * CW * dpr, sh, dx, dy, n * CW, sh / dpr);
+                        i += n;
+                    } else {                                  // trocito agitado: el movimiento cambia despacito de un trocito al vecino
+                        const a = ag[base + i], dx = i * CW;
+                        const ex = a * AGITACION_FUERZA * k * (dr[base + i] * 0.75 + Math.sin(t * 7 + dx * 0.012 + dy * 0.02) * 0.6);
+                        ctx.drawImage(capa, (dx - off - ex) * dpr, sy, (CW + 0.6) * dpr, sh, dx, dy, CW + 0.6, sh / dpr);
+                        i++;
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        // La altura (y) del borde de cada colina en una posición x. capa 0 = lejana, 2 = la de enfrente
+        function colina(x, capa) {
+            const u = x / W;
+            if (capa === 0) return horizonte + H * 0.03 * Math.sin(u * 3.2 + 0.6) + H * 0.012 * Math.sin(u * 7.1);
+            if (capa === 1) return horizonte + H * 0.12 + H * 0.035 * Math.sin(u * 2.4 + 2.1) + H * 0.010 * Math.sin(u * 6);
+            return horizonte + H * 0.27 + H * 0.030 * Math.sin(u * 2.0 + 4.0) + H * 0.008 * Math.sin(u * 5.3);
+        }
+
+        function medir() {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            dpr = Math.min(window.devicePixelRatio || 1, 1.5); // nítido en pantallas finas, sin gastar de más
+            canvas.width = Math.round(W * dpr);
+            canvas.height = Math.round(H * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            vertical = W < H * 0.85;
+            horizonte = H * (vertical ? 0.40 : 0.48);
+            hx = W * 0.5;
+            hy = H * 0.80;
+            sH = clamp(H * 0.042, 22, 40);
+            sGrande = Math.min(W * 0.80 / 1.7, H * 0.60 / 1.535);
+            cenX = W / 2;
+            cenY = H / 2 - 0.13 * sGrande;       // el corazón queda centrado en la pantalla
+
+            arbolX = W * (vertical ? 0.70 : 0.74);
+            arbolBase = colina(arbolX, 0) + 3;
+            arbolAlto = H * 0.17;
+        }
+
+        // =====================================================
+        //  CREAR LA ESCENA: flores, pasto y nubes
+        // =====================================================
+        let elementos = [];     // flores y pasto, ordenados de lejos a cerca
+        let nubes = [];
+        let tCorazonNube = 8;   // segundos para que salga la próxima nube con forma de corazón
+
+        function nuevaFlor(x, y, azar, alto) {
+            const t = clamp((y - horizonte) / (H - horizonte));
+            const esc = (0.35 + 1.0 * t) * (H / 800);        // más lejos = más chiquita
+            const r = azar();
+            const tipo = r < 0.58 ? FLORES[0] : FLORES[1 + Math.floor(azar() * (FLORES.length - 1))];
+            return {
+                clase: 'flor', x: x, y: y, esc: esc,
+                alto: alto || (16 + azar() * 16) * esc,
+                pr: (4.6 + azar() * 1.8) * esc,              // tamaño de los pétalos
+                n: 5 + Math.floor(azar() * 3),               // cuántos pétalos
+                col: tipo, fase: azar() * 6.28
+            };
+        }
+
+        function crearEscena() {
+            const azar = semilla(20261121);
+            const flores = [];
+            const pastos = [];
+
+            // flores repartidas por el campo (más hacia el frente)
+            const nf = clamp(Math.round(W * H / 8000), 60, 180);
+            for (let i = 0; i < nf; i++) {
+                const x = azar() * W;
+                const yTop = colina(x, 1) + H * 0.012;
+                const y = yTop + (H * 0.985 - yTop) * Math.pow(azar(), 0.8);
+                flores.push(nuevaFlor(x, y, azar));
+            }
+
+            // matitas de pasto
+            const np = clamp(Math.round(W * H / 2600), 150, 520);
+            for (let i = 0; i < np; i++) {
+                const x = azar() * W;
+                const yTop = colina(x, 1) + H * 0.008;
+                const y = yTop + (H * 0.995 - yTop) * Math.pow(azar(), 0.8);
+                const t = clamp((y - horizonte) / (H - horizonte));
+                pastos.push({ clase: 'pasto', x: x, y: y, esc: (0.35 + 1.0 * t) * (H / 800),
+                              fase: azar() * 6.28, n: 3 + Math.floor(azar() * 3) });
+            }
+
+            // las flores y el pasto de ADELANTE del corazón: lo van a tapar un poquito
+            [[-0.95, 0.95], [0.95, 0.85], [0.15, 1.5], [-0.4, 1.15], [0.6, 1.25]].forEach(function(o) {
+                const f = nuevaFlor(hx + o[0] * sH, hy + o[1] * sH, azar, (o[1] - 0.3) * sH);
+                f.esc = 1.5 * (H / 800); f.pr = 7 * f.esc / 1.5 * 1.0; f.n = 6;
+                f.col = o[0] > 0.5 ? FLORES[1] : FLORES[0];
+                flores.push(f);
+            });
+            [-1.1, -0.7, -0.3, 0.1, 0.5, 0.9, 1.2].forEach(function(ox, i) {
+                pastos.push({ clase: 'pasto', x: hx + ox * sH, y: hy + (0.95 + (i % 3) * 0.2) * sH,
+                              esc: 2.0 * (H / 800), fase: azar() * 6.28, n: 4 });
+            });
+
+            elementos = flores.concat(pastos).sort((p, q) => p.y - q.y);
+        }
+
+        function nuevaNube(x, tipo) {
+            const esc = 0.65 + Math.random() * 0.85;
+            const w = clamp(W * 0.15, 95, 240) * esc * (tipo === 'corazon' ? 0.85 : 1);
+            const puffs = [];
+            if (tipo === 'normal') {                 // 5 a 7 "bolitas" que forman la nube
+                const k = 5 + Math.floor(Math.random() * 3);
+                for (let i = 0; i < k; i++) {
+                    const u = i / (k - 1);
+                    const alt = Math.sin(Math.PI * u);
+                    puffs.push({ dx: -0.42 + 0.84 * u + (Math.random() - 0.5) * 0.06,
+                                 dy: -0.02 - 0.12 * alt * Math.random(),
+                                 r: 0.11 + 0.13 * alt * (0.7 + Math.random() * 0.5) });
+                }
+            }
+            return { x: x, y: H * (0.05 + Math.random() * (vertical ? 0.28 : 0.30)), w: w, tipo: tipo,
+                     vel: (9 + esc * 15) * clamp(W / 1400, 0.7, 1.3), puffs: puffs };
+        }
+
+        function crearNubes() {
+            nubes = [];
+            const n = vertical ? 5 : 8;
+            for (let i = 0; i < n; i++) {
+                nubes.push(nuevaNube(Math.random() * W * 1.1 - W * 0.05, i === 2 ? 'corazon' : 'normal'));
+            }
+        }
+
+        // Las nubes se mueven hacia la derecha; al salir vuelven a entrar por la izquierda.
+        // Cada cierto tiempo, la que vuelve a entrar es una nube con forma de corazón.
+        function actualizarNubes(dt) {
+            tCorazonNube -= dt;
+            for (let i = 0; i < nubes.length; i++) {
+                const n = nubes[i];
+                n.x += n.vel * dt;
+                if (n.x - n.w * 0.7 > W) {
+                    const hayCorazon = nubes.some(o => o !== n && o.tipo === 'corazon');
+                    const corazon = tCorazonNube <= 0 && !hayCorazon;
+                    if (corazon) tCorazonNube = 14 + Math.random() * 10;
+                    const nueva = nuevaNube(0, corazon ? 'corazon' : 'normal');
+                    nueva.x = -nueva.w * 0.7;
+                    nubes[i] = nueva;
+                }
+            }
+        }
+
+        // =====================================================
+        //  FORMAS
+        // =====================================================
+        // El mismo corazón de la animación (con s = tamaño)
+        function trazoCorazon(cx, cy, s) {
+            ctx.beginPath();
+            ctx.moveTo(cx, cy + s * 0.9);
+            ctx.bezierCurveTo(cx - s * 1.5, cy - s * 0.1, cx - s * 0.7, cy - s * 1.1, cx, cy - s * 0.4);
+            ctx.bezierCurveTo(cx + s * 0.7, cy - s * 1.1, cx + s * 1.5, cy - s * 0.1, cx, cy + s * 0.9);
+            ctx.closePath();
+        }
+        function corazon(cx, cy, s) { trazoCorazon(cx, cy, s); ctx.fill(); }
+
+        function estrellita(x, y, r) {
+            ctx.beginPath();
+            ctx.moveTo(x, y - r * 2.2); ctx.lineTo(x + r * 0.6, y - r * 0.6);
+            ctx.lineTo(x + r * 2.2, y); ctx.lineTo(x + r * 0.6, y + r * 0.6);
+            ctx.lineTo(x, y + r * 2.2); ctx.lineTo(x - r * 0.6, y + r * 0.6);
+            ctx.lineTo(x - r * 2.2, y); ctx.lineTo(x - r * 0.6, y - r * 0.6);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // =====================================================
+        //  DIBUJO: CIELO Y NUBES
+        // =====================================================
+        // ---- Capas que no cambian: se dibujan una vez y después solo se copian en cada cuadro ----
+        let cCielo, cColinas, cAtras, cFrente, y0Campo = 0;
+        function lienzoNuevo(w, h) {
+            const c = document.createElement('canvas');
+            c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+            return c;
+        }
+        function enReserva(c, dy, fn) {
+            const prev = ctx; ctx = c.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, -dy * dpr);
+            fn();
+            ctx = prev;
+        }
+        function construirCaches() {
+            cCielo = lienzoNuevo(W, H);
+            enReserva(cCielo, 0, dibujarCielo);
+            cColinas = lienzoNuevo(W, H);                     // colinas + árbol + persona recostada
+            enReserva(cColinas, 0, function() {
+                dibujarColina(0, '#b5e8a0', '#8fd47f');
+                dibujarArbol(0);
+                dibujarColina(1, '#8bd673', '#6cc260');
+                dibujarColina(2, '#6cc45f', '#4aa347');
+            });
+            // flores y pasto: las de ATRÁS del corazón escondido y las de ADELANTE (lo tapan un poquito)
+            y0Campo = Math.max(0, Math.floor(horizonte - 4));
+            prepararBarrido();
+            cAtras = lienzoNuevo(W, H - y0Campo);
+            cFrente = lienzoNuevo(W, H - y0Campo);
+            const pintar = function(c, delante) {
+                enReserva(c, y0Campo, function() {
+                    for (const e of elementos) {
+                        if ((e.y > hy) !== delante) continue;
+                        if (e.clase === 'flor') dibujarFlor(e, 0); else dibujarPasto(e, 0);
+                    }
+                });
+            };
+            pintar(cAtras, false);
+            pintar(cFrente, true);
+        }
+        // El viento: la capa se copia en tiras y cada tira se mueve un poquito distinto, como una ola en el pasto
+        function dibujarCampo(c, t) {
+            const alto = H - y0Campo, paso = 14;
+            for (let y = 0; y < alto; y += paso) {
+                const hh = Math.min(paso + 1, alto - y);
+                const prof = clamp((y0Campo + y - horizonte) / (H - horizonte));
+                const off = (Math.sin(t * 1.3 + (y0Campo + y) * 0.02) * (0.8 + 2.4 * prof) + Math.sin(t * 0.7 + y * 0.05) * 0.5) * (H / 800);
+                const sy = Math.round(y * dpr), sh = Math.min(Math.round(hh * dpr), c.height - sy);
+                if (sh <= 0) break;
+                ctx.drawImage(c, 0, sy, c.width, sh, off, y0Campo + y, W, sh / dpr);
+            }
+        }
+
+        function dibujarCielo() {
+            const g = ctx.createLinearGradient(0, 0, 0, horizonte + H * 0.1);
+            g.addColorStop(0, '#6fbff2');
+            g.addColorStop(0.6, '#a9dcff');
+            g.addColorStop(1, '#e4f6ff');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+
+            // un solcito suave en la esquina
+            const sx = W * 0.15, sy = H * 0.14, sr = H * 0.35;
+            const s = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr);
+            s.addColorStop(0, 'rgba(255, 246, 205, 0.85)');
+            s.addColorStop(0.25, 'rgba(255, 246, 205, 0.35)');
+            s.addColorStop(1, 'rgba(255, 246, 205, 0)');
+            ctx.fillStyle = s;
+            ctx.fillRect(0, 0, W, H);
+        }
+
+        // La forma de una nube normal: varias bolitas que se juntan + una base planita
+        function rutaNube(n, dy) {
+            const w = n.w;
+            ctx.beginPath();
+            for (const p of n.puffs) {
+                ctx.moveTo(p.dx * w + p.r * w, p.dy * w + dy);
+                ctx.arc(p.dx * w, p.dy * w + dy, p.r * w, 0, Math.PI * 2);
+            }
+            ctx.rect(-0.46 * w, -0.03 * w + dy, 0.92 * w, 0.13 * w);
+        }
+
+        // Una nube con forma de corazón: la curva clásica del corazón + bolitas en el borde para que se vea esponjosa
+        function rellenarNubeCorazon(w, dy) {
+            const k = w / 34;
+            const pts = [];
+            for (let i = 0; i < 72; i++) {
+                const t = i / 72 * Math.PI * 2;
+                pts.push({
+                    x: 16 * Math.pow(Math.sin(t), 3) * k,
+                    y: -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * k + dy
+                });
+            }
+            ctx.beginPath();
+            pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Cada nube se dibuja UNA vez en un lienzo pequeño y luego solo se mueve ese dibujo
+        function dibujarNube(n) {
+            if (!n.sprite) {
+                n.sw = Math.ceil(n.w * 1.5); n.sh = Math.ceil(n.w * 1.4); n.sx = n.sw / 2; n.sy = n.w * 0.72;
+                const c = document.createElement('canvas');
+                c.width = Math.round(n.sw * dpr); c.height = Math.round(n.sh * dpr);
+                const prev = ctx; ctx = c.getContext('2d');
+                ctx.setTransform(dpr, 0, 0, dpr, n.sx * dpr, n.sy * dpr);
+                pintarNube(n);
+                ctx = prev; n.sprite = c;
+            }
+            ctx.drawImage(n.sprite, n.x - n.sx, n.y - n.sy, n.sw, n.sh);
+        }
+        function pintarNube(n) {
+            const w = n.w;
+            ctx.save();
+            if (n.tipo === 'corazon') {
+                ctx.fillStyle = 'rgba(255, 190, 215, 0.55)';           // sombrita rosa de abajo
+                rellenarNubeCorazon(w, w * 0.035);
+                const g = ctx.createLinearGradient(0, -w * 0.4, 0, w * 0.4);
+                g.addColorStop(0, '#ffffff');
+                g.addColorStop(1, '#ffe6ef');
+                ctx.fillStyle = g;
+                rellenarNubeCorazon(w, 0);
+            } else {
+                ctx.fillStyle = 'rgba(150, 185, 225, 0.55)';           // sombrita azulada de abajo
+                rutaNube(n, w * 0.035);
+                ctx.fill();
+                const g = ctx.createLinearGradient(0, -w * 0.3, 0, w * 0.1);
+                g.addColorStop(0, '#ffffff');
+                g.addColorStop(1, '#eaf4ff');
+                ctx.fillStyle = g;
+                rutaNube(n, 0);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // =====================================================
+        //  DIBUJO: COLINAS, ÁRBOL Y LA PERSONA RECOSTADA
+        // =====================================================
+        const imgRecostado = new Image();
+        let imgRecostadoOk = false;
+        imgRecostado.onload = function() { imgRecostadoOk = true; if (typeof construirCaches === 'function' && W) construirCaches(); };  // (se redibuja la capa fija cuando llega la imagen)
+        imgRecostado.src = IMAGEN_RECOSTADO;
+
+        function dibujarColina(capa, c1, c2) {
+            const top = colina(W / 2, capa) - H * 0.05;
+            const g = ctx.createLinearGradient(0, top, 0, H);
+            g.addColorStop(0, c1);
+            g.addColorStop(1, c2);
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.moveTo(0, H);
+            for (let x = 0; x <= W + 6; x += 6) ctx.lineTo(x, colina(Math.min(x, W), capa));
+            ctx.lineTo(W, H);
+            ctx.closePath();
+            ctx.fill();
+            // borde iluminado por el sol
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let x = 0; x <= W + 6; x += 6) {
+                const y = colina(Math.min(x, W), capa);
+                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // Quien descansa al pie del árbol: una silueta sencilla (o tu imagen recostado.png)
+        function dibujarRecostado(x, y, u, t) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(40, 110, 50, 0.25)';                   // sombra en el pasto
+            ctx.beginPath(); ctx.ellipse(x - 0.9 * u, y, 2.4 * u, 0.32 * u, 0, 0, Math.PI * 2); ctx.fill();
+            if (imgRecostadoOk) {
+                const alto = u * 3.2, ancho = alto * imgRecostado.naturalWidth / imgRecostado.naturalHeight;
+                ctx.drawImage(imgRecostado, x - ancho * 0.7, y - alto, ancho, alto);
+            } else {
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#5b7fbf'; ctx.lineWidth = 0.42 * u;   // piernas estiradas
+                ctx.beginPath(); ctx.moveTo(x - 0.1 * u, y - 0.28 * u); ctx.lineTo(x - 1.9 * u, y - 0.22 * u); ctx.stroke();
+                ctx.strokeStyle = '#8a5a3c'; ctx.lineWidth = 0.34 * u;   // zapatos
+                ctx.beginPath(); ctx.moveTo(x - 2.0 * u, y - 0.22 * u); ctx.lineTo(x - 2.3 * u, y - 0.22 * u); ctx.stroke();
+                ctx.strokeStyle = '#ff8fb1'; ctx.lineWidth = 0.62 * u;   // cuerpo recargado en el tronco
+                ctx.beginPath(); ctx.moveTo(x - 0.05 * u, y - 0.4 * u); ctx.lineTo(x + 0.35 * u, y - 1.45 * u); ctx.stroke();
+                ctx.fillStyle = '#f2c9a0';                               // cabeza
+                ctx.beginPath(); ctx.arc(x + 0.5 * u, y - 1.95 * u, 0.38 * u, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#4a3126';                               // cabello
+                ctx.beginPath(); ctx.arc(x + 0.5 * u, y - 2.0 * u, 0.4 * u, Math.PI, Math.PI * 1.95); ctx.fill();
+            }
+            ctx.restore();
+        }
+        // un corazoncito que late sobre su cabeza (está soñando): es lo único que se mueve de esa parte
+        function dibujarSueno(t) {
+            const th = arbolAlto, x = arbolX - th * 0.08, y = arbolBase + 1, u = th * 0.075;
+            ctx.fillStyle = '#ff4f7e';
+            corazon(x + 0.5 * u, y - 3.1 * u - Math.sin(t * 1.6) * 0.15 * u, 0.32 * u * (1 + 0.1 * Math.sin(t * 3.1)));
+        }
+
+        function dibujarArbol(t) {
+            const th = arbolAlto, x = arbolX, y = arbolBase;
+            ctx.fillStyle = 'rgba(40, 110, 50, 0.25)';                   // sombra del árbol
+            ctx.beginPath(); ctx.ellipse(x, y + 2, th * 0.38, th * 0.05, 0, 0, Math.PI * 2); ctx.fill();
+
+            // tronco
+            ctx.fillStyle = '#7b4f2e';
+            ctx.beginPath();
+            ctx.moveTo(x - th * 0.04, y); ctx.lineTo(x - th * 0.022, y - th * 0.46);
+            ctx.lineTo(x + th * 0.022, y - th * 0.46); ctx.lineTo(x + th * 0.04, y);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#5e3b20';                                   // lado en sombra
+            ctx.beginPath();
+            ctx.moveTo(x + th * 0.008, y); ctx.lineTo(x + th * 0.008, y - th * 0.46);
+            ctx.lineTo(x + th * 0.022, y - th * 0.46); ctx.lineTo(x + th * 0.04, y);
+            ctx.closePath(); ctx.fill();
+
+            dibujarRecostado(x - th * 0.05 - th * 0.03, y + 1, th * 0.075, t);
+
+            // copa: tres capas de bolitas verdes (oscuro, medio y claro)
+            const cx = x, cy = y - th * 0.64;
+            const bolas = [[0, 0, 0.30], [-0.2, 0.06, 0.22], [0.2, 0.06, 0.22], [-0.1, -0.17, 0.2],
+                           [0.12, -0.16, 0.2], [-0.3, 0.15, 0.14], [0.3, 0.15, 0.14]];
+            [['#3e9448', 1, 0, 0], ['#58b857', 0.85, -0.03, -0.03], ['#80d56f', 0.5, -0.08, -0.08]].forEach(function(c) {
+                ctx.fillStyle = c[0];
+                ctx.beginPath();
+                bolas.forEach(function(b) {
+                    const r = b[2] * th * c[1];
+                    const px = cx + (b[0] + c[2]) * th, py = cy + (b[1] + c[3]) * th;
+                    ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, Math.PI * 2);
+                });
+                ctx.fill();
+            });
+            // florecitas rosas en la copa
+            ctx.fillStyle = '#ffb3c8';
+            [[-0.18, -0.12], [0.16, -0.05], [0.02, 0.1], [-0.28, 0.08], [0.27, 0.12], [0.0, -0.24]].forEach(function(p) {
+                ctx.beginPath(); ctx.arc(cx + p[0] * th, cy + p[1] * th, th * 0.018, 0, Math.PI * 2); ctx.fill();
+            });
+        }
+
+        // =====================================================
+        //  DIBUJO: FLORES Y PASTO (mueven con el viento)
+        // =====================================================
+        function dibujarFlor(f, t) {
+            const sway = Math.sin(t * 1.3 + f.fase + f.x * 0.004) * f.alto * 0.06;
+            const cx = f.x + sway, cy = f.y - f.alto;
+            ctx.strokeStyle = '#3f9b46';
+            ctx.lineWidth = Math.max(1, 1.6 * f.esc);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(f.x, f.y);
+            ctx.quadraticCurveTo(f.x + sway * 0.2, f.y - f.alto * 0.5, cx, cy);
+            ctx.stroke();
+            ctx.fillStyle = '#4aa84f';                                   // hojita
+            ctx.beginPath();
+            ctx.ellipse(f.x + f.pr * 0.7, f.y - f.alto * 0.4, f.pr * 0.8, f.pr * 0.35, -0.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = f.col.petalo;                                // pétalos
+            for (let i = 0; i < f.n; i++) {
+                const ang = i / f.n * Math.PI * 2 + f.fase;
+                ctx.beginPath();
+                ctx.arc(cx + Math.cos(ang) * f.pr * 1.05, cy + Math.sin(ang) * f.pr * 1.0, f.pr, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.fillStyle = f.col.centro;                                // centro
+            ctx.beginPath(); ctx.arc(cx, cy, f.pr * 0.62, 0, Math.PI * 2); ctx.fill();
+        }
+
+        const VERDES = ['#4aa04a', '#5fb85a', '#7bcf6b'];
+        function dibujarPasto(p, t) {
+            ctx.lineCap = 'round';
+            ctx.lineWidth = Math.max(1, 1.5 * p.esc);
+            for (let k = 0; k < p.n; k++) {
+                const ox = (k - (p.n - 1) / 2) * 3.2 * p.esc;
+                const alto = (14 + (k * 7919 % 5) * 2.2) * p.esc;
+                const lean = (k - (p.n - 1) / 2) * 3 * p.esc + Math.sin(t * 1.4 + p.fase + p.x * 0.01 + k) * 2.2 * p.esc;
+                ctx.strokeStyle = VERDES[k % 3];
+                ctx.beginPath();
+                ctx.moveTo(p.x + ox, p.y);
+                ctx.quadraticCurveTo(p.x + ox + lean * 0.3, p.y - alto * 0.6, p.x + ox + lean, p.y - alto);
+                ctx.stroke();
+            }
+        }
+
+        // =====================================================
+        //  EL CORAZÓN ESCONDIDO
+        // =====================================================
+        let chispas = [];       // corazoncitos que suben del corazón escondido
+        let proxChispa = 1;
+
+        function dibujarCorazonEscondido(s, t) {
+            const pulso = 0.5 + 0.5 * Math.sin(t * 2.2);
+
+            // resplandor suave que respira
+            const rg = s * 4.4 * (0.9 + 0.2 * pulso);
+            const g = ctx.createRadialGradient(hx, hy, s * 0.2, hx, hy, rg);
+            g.addColorStop(0, 'rgba(255, 110, 165, ' + (0.55 * (0.6 + 0.4 * pulso)) + ')');
+            g.addColorStop(0.5, 'rgba(255, 150, 195, ' + (0.2 * (0.6 + 0.4 * pulso)) + ')');
+            g.addColorStop(1, 'rgba(255, 170, 210, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(hx, hy, rg, 0, Math.PI * 2); ctx.fill();
+
+            // un aro que se expande, como una ondita llamando la atención
+            const u = (t % 2.6) / 2.6;
+            ctx.strokeStyle = 'rgba(255, 110, 165, ' + (0.4 * (1 - u)) + ')';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(hx, hy, s * (1.2 + 2.8 * u), 0, Math.PI * 2); ctx.stroke();
+
+            // el corazón
+            ctx.save();
+            ctx.shadowColor = 'rgba(255, 70, 130, 0.7)';
+            ctx.shadowBlur = s * 0.8;
+            const gc = ctx.createRadialGradient(hx - s * 0.35, hy - s * 0.45, s * 0.05, hx, hy, s * 1.25);
+            gc.addColorStop(0, '#ffa6c0'); gc.addColorStop(0.45, '#ff5c86'); gc.addColorStop(1, '#e8416f');
+            ctx.fillStyle = gc;
+            corazon(hx, hy, s);
+            ctx.restore();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';                  // brillito
+            ctx.save(); ctx.translate(hx - 0.5 * s, hy - 0.38 * s); ctx.rotate(-0.55);
+            ctx.beginPath(); ctx.ellipse(0, 0, 0.24 * s, 0.1 * s, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+
+            // chispitas que titilan alrededor
+            for (let j = 0; j < 6; j++) {
+                const ang = j * 1.05 + t * 0.4 * (j % 2 ? 1 : -1);
+                const d = s * (1.7 + 0.4 * Math.sin(t * 1.1 + j * 1.7));
+                const tw = 0.5 + 0.5 * Math.sin(t * 3 + j * 2.3);
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.9 * tw) + ')';
+                estrellita(hx + Math.cos(ang) * d, hy + Math.sin(ang) * d * 0.8, s * (0.05 + 0.05 * tw));
+            }
+        }
+
+        function actualizarChispas(dt) {
+            proxChispa -= dt;
+            if (proxChispa <= 0 && ((estado === 'escena' && descubierto) || estado === 'final')) {
+                const fin = estado === 'final';
+                chispas.push({ x: fin ? W * (0.12 + 0.76 * Math.random()) : hx + (Math.random() - 0.5) * sH,
+                               y: fin ? H * 0.5 : hy - sH * 0.6, t: 0, vida: 1.8 + Math.random() * (fin ? 1.8 : 1),
+                               fase: Math.random() * 6, s: sH * (0.12 + Math.random() * 0.1) });
+                proxChispa = estado === 'final' ? 0.35 + Math.random() * 0.5 : 0.9 + Math.random() * 1.2;
+            }
+            for (const c of chispas) { c.t += dt; c.y -= sH * 1.6 * dt; }
+            chispas = chispas.filter(c => c.t < c.vida);
+        }
+        function dibujarChispas() {
+            for (const c of chispas) {
+                const u = c.t / c.vida;
+                ctx.globalAlpha = Math.sin(Math.PI * u) * 0.9;
+                ctx.fillStyle = '#ff6b9a';
+                corazon(c.x + Math.sin(c.fase + c.t * 3) * sH * 0.4, c.y, c.s);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        // El corazón grande de la invitación: con brillo de globo, como las tarjetas de la animación
+        function dibujarCorazonGrande(x, y, s) {
+            ctx.save();
+            if (s < sGrande * 1.4) { ctx.shadowColor = 'rgba(255, 70, 130, 0.65)'; ctx.shadowBlur = s * 0.3; }
+            const g = ctx.createRadialGradient(x - 0.35 * s, y - 0.45 * s, 0.05 * s, x, y, 1.25 * s);
+            g.addColorStop(0, '#ffa6c0'); g.addColorStop(0.45, '#ff5c86'); g.addColorStop(1, '#e8416f');
+            ctx.fillStyle = g;
+            corazon(x, y, s);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
+            ctx.translate(x - 0.5 * s, y - 0.4 * s); ctx.rotate(-0.55);
+            ctx.beginPath(); ctx.ellipse(0, 0, 0.26 * s, 0.12 * s, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+            ctx.lineWidth = Math.max(2, s * 0.012);
+            trazoCorazon(x, y, s);
+            ctx.stroke();
+        }
+
+        // =====================================================
+        //  ESTADOS:  escena -> creciendo -> invitacion -> entrando
+        // =====================================================
+        let estado = 'escena';
+        let tEstado = 0;
+        let hover = false, hoverK = 0, pistaK = 1;
+        let corazonActual = { x: 0, y: 0, s: 0 };
+        let navegando = false;
+
+        function cambiar(nuevo) { estado = nuevo; tEstado = 0; }
+
+        function colocarInvitacion() {
+            const s = sGrande;
+            preguntaEl.style.left = (cenX - 0.58 * s) + 'px';
+            preguntaEl.style.top = (cenY - 0.34 * s) + 'px';
+            preguntaEl.style.width = (1.16 * s) + 'px';
+            preguntaEl.style.height = (0.58 * s) + 'px';
+            // si el texto no cabe en el corazón, se achica la letra hasta que quepa
+            let tam = s * 0.16;
+            preguntaEl.style.fontSize = tam + 'px';
+            let seguro = 0;
+            while (preguntaTxt.offsetHeight > preguntaEl.clientHeight && tam > 12 && seguro++ < 60) {
+                tam -= 1;
+                preguntaEl.style.fontSize = tam + 'px';
+            }
+            btnOk.style.left = cenX + 'px';
+            btnOk.style.top = (cenY + 0.55 * s) + 'px';
+            btnOk.style.fontSize = (s * 0.14) + 'px';
+        }
+
+        btnOk.addEventListener('click', function() {
+            if (estado !== 'invitacion') return;
+            invitacion.classList.remove('visible');
+            cambiar('entrando');
+        });
+
+        canvas.addEventListener('pointerdown', function(ev) {
+            ultPunto = null;
+            barrer(ev.clientX, ev.clientY);
+            if (estado === 'escena' && descubierto && Math.hypot(ev.clientX - hx, ev.clientY - hy) < Math.max(sH * 2.2, 34)) {
+                cambiar('creciendo');
+            }
+        });
+        window.addEventListener('pointerup', function() { ultPunto = null; });
+        window.addEventListener('pointermove', function(ev) {
+            if (estado === 'escena' && !esperando) barrer(ev.clientX, ev.clientY);
+            hover = estado === 'escena' && descubierto && Math.hypot(ev.clientX - hx, ev.clientY - hy) < Math.max(sH * 2.2, 34);
+            canvas.style.cursor = hover ? 'pointer' : 'default';
+        });
+
+        // =====================================================
+        //  BUCLE PRINCIPAL
+        // =====================================================
+        let ultimo = 0;
+        // Botón de corazón al final del mensaje: vuelve a empezar desde la bienvenida
+        const btnReiniciar = document.createElement('button');
+        btnReiniciar.id = 'btnReiniciar';
+        btnReiniciar.type = 'button';
+        btnReiniciar.innerHTML = '<svg viewBox="0 0 200 180"><path d="M100 172 C20 112 4 70 4 48 C4 22 24 6 48 6 C72 6 90 20 100 40 C110 20 128 6 152 6 C176 6 196 22 196 48 C196 70 180 112 100 172 Z" fill="#ff5c86" stroke="#fff" stroke-width="5"/></svg><span>Empezar de nuevo</span>';
+        btnReiniciar.addEventListener('click', function() {
+            if (btnReiniciar.disabled) return;
+            btnReiniciar.disabled = true;
+            const SEG = 1.8;                                     // ← duración de la despedida (segundos)
+            if (window.musica && window.musica.apagar) window.musica.apagar(SEG);   // la canción baja poco a poco
+            cortina.style.transition = 'opacity ' + SEG + 's ease';
+            cortina.style.opacity = '1';                         // la pantalla se va a rosa suavemente
+            setTimeout(function() { window.location.reload(); }, SEG * 1000 + 150);
+        });
+        mensajeEl.appendChild(btnReiniciar);
+
+        // Fin de la bienvenida: se quita la capa y la cortina rosa se desvanece, descubriendo la animación
+        let terminado = false;
+        function terminar() {
+            terminado = true;
+            bienvenida.style.display = 'none';
+            window.pausaPrincipal = false;                  // la animación principal vuelve a dibujar
+            if (window.musica) window.musica.escena('juego');
+            cortina.style.transition = 'opacity 1.3s ease';
+            cortina.style.opacity = '0';
+                    }
+
+        let tAbierto = 0;
+        let esperando = true;       // mientras la puerta la tapa, no se dibuja (la puerta se crea más abajo en la página)
+        document.addEventListener('DOMContentLoaded', function() { if (!document.getElementById('puerta')) esperando = false; });
+        window.addEventListener('puerta-abierta', function() { esperando = false; tAbierto = performance.now() / 1000; });
+
+        function frame(now) {
+            if (terminado) return;
+            if (esperando) { ultimo = now; requestAnimationFrame(frame); return; }
+            const dt = Math.min((now - ultimo) / 1000, 0.05);
+            ultimo = now;
+            const t = now / 1000;
+            tEstado += dt;
+
+            // 1. cielo y sol (copiados), y las nubes encima (quedan detrás de las colinas)
+            ctx.drawImage(cCielo, 0, 0, W, H);
+            actualizarNubes(dt);
+            nubes.forEach(dibujarNube);
+
+            // 2. colinas y árbol lejano (copiados) + el corazoncito que sueña
+            ctx.drawImage(cColinas, 0, 0, W, H);
+            dibujarSueno(t);
+
+            // 3. flores y pasto con viento. El corazón escondido va en medio:
+            //    lo de más adelante lo tapa un poquito.
+            hoverK += ((hover ? 1 : 0) - hoverK) * Math.min(1, dt * 10);
+            actualizarAgitacion(dt);
+            revK += ((descubierto ? 1 : clamp(progresoBarrido / PROGRESO_PARA_ENCONTRAR) * 0.7) - revK) * Math.min(1, dt * 6);
+            const sPequeno = sH * (1 + 0.12 * hoverK) * (1 + 0.04 * Math.sin(t * 3.1)) * revK;   // va saliendo conforme barres
+            if (estado === 'escena' && bR) dibujarCapaAgitada(cAtras, t, 0.8); else dibujarCampo(cAtras, t);
+            if (estado === 'escena' && revK > 0.03) dibujarCorazonEscondido(sPequeno, t);
+            if (estado === 'escena' && bR) dibujarCapaAgitada(cFrente, t, 1.2); else dibujarCampo(cFrente, t);
+
+            actualizarChispas(dt);
+            dibujarChispas();
+
+            // 4. la pista, para que se note que hay algo escondido
+            pistaK += ((estado === 'escena' ? 1 : 0) - pistaK) * Math.min(1, dt * 4);
+            if (PISTA && pistaK > 0.01) {
+                const a = clamp((t - tAbierto - 7) / 1.5) * (0.75 + 0.25 * Math.sin(t * 2)) * pistaK;
+                if (a > 0.01) {
+                    const tam = clamp(W * 0.035, 20, 34);
+                    ctx.font = '700 ' + tam + 'px ' + FUENTE;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.globalAlpha = a;
+                    ctx.shadowColor = 'rgba(30, 90, 40, 0.6)';
+                    ctx.shadowBlur = 8;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(descubierto ? PISTA_TOCAR : PISTA, W / 2, Math.min(H * 0.95, hy + sH * 3.6));
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1;
+                }
+            }
+
+            // 5. el corazón crece, se vuelve la invitación y, con OK, se llena la pantalla
+            if (estado !== 'escena' && estado !== 'final') {
+                let velo = 0, c = corazonActual;
+                if (estado === 'creciendo') {
+                    const p = clamp(tEstado / 1.5), pe = easeInOut(p);
+                    c.x = lerp(hx, cenX, pe); c.y = lerp(hy, cenY, pe);
+                    c.s = lerp(sH, sGrande, easeOutBack(clamp(p / 0.85)));
+                    velo = 0.55 * pe;
+                    if (p >= 1) {
+                        cambiar('invitacion');
+                        colocarInvitacion();
+                        invitacion.classList.add('visible');
+                        setTimeout(function() { btnOk.focus({ preventScroll: true }); }, 700);
+                    }
+                } else if (estado === 'invitacion') {
+                    c.x = cenX; c.y = cenY;
+                    c.s = sGrande * (1 + 0.025 * Math.sin(t * 3));     // late despacito
+                    velo = 0.55;
+                } else {   // entrando
+                    const p = clamp(tEstado / 1.1);
+                    c.x = cenX; c.y = cenY;
+                    c.s = lerp(sGrande, Math.hypot(W, H) * 0.9, p * p * p);
+                    velo = 0.55;
+                    if (tEstado > 0.75) cortina.style.opacity = '1';
+                    if (tEstado > 1.4 && !navegando) { navegando = true; terminar(); }
+                }
+                ctx.fillStyle = 'rgba(255, 238, 246, ' + velo + ')';
+                ctx.fillRect(0, 0, W, H);
+                dibujarCorazonGrande(c.x, c.y, c.s);
+            }
+
+            // 6. final: el mensaje se desplaza solito; si lo tocas o lo mueves, se detiene unos segundos
+            if (estado === 'final' && tEstado > 3) {
+                if (pausaMsg > 0) { pausaMsg -= dt; posMsg = mensajeEl.scrollTop; }
+                else { posMsg += VEL_MENSAJE * dt; mensajeEl.scrollTop = posMsg; }
+            }
+
+            requestAnimationFrame(frame);
+        }
+
+        let pausaMsg = 0, posMsg = 0;
+        ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function(n) {
+            mensajeEl.addEventListener(n, function() { pausaMsg = 4; }, { passive: true });
+        });
+
+        // Se llama desde la animación cuando se toca a Snoopy y Fifi: cortina rosa -> cielo con el mensaje
+        window.iniciarFinal = function() {
+            cortina.style.transition = 'opacity 0.9s ease';
+            cortina.style.opacity = '1';
+            if (window.musica) window.musica.escena('final');
+            setTimeout(function() {
+                medir(); crearEscena(); crearNubes();
+                chispas = []; pausaMsg = 0; posMsg = 0; mensajeEl.scrollTop = 0;
+                invitacion.classList.remove('visible');
+                bienvenida.style.display = 'block';
+                window.pausaPrincipal = true;
+                cambiar('final');
+                terminado = false;
+                ultimo = performance.now();
+                requestAnimationFrame(frame);
+                setTimeout(function() {
+                    cortina.style.transition = 'opacity 1.3s ease';
+                    cortina.style.opacity = '0';
+                    finalEl.classList.add('visible');
+                }, 150);
+            }, 1000);
+        };
+
+        medir();
+        crearEscena();
+        crearNubes();
+        construirCaches();
+        window.addEventListener('resize', function() {
+            if (terminado) return;
+            medir();
+            crearEscena();
+            crearNubes();
+            construirCaches();
+            if (estado === 'invitacion') colocarInvitacion();
+        });
+        requestAnimationFrame(frame);
+    })();
+    </script>
+
+    <!-- PUERTA: la contraseña. Va encima de todo y se abre al poner la clave correcta -->
+    <div id="puerta">
+        <div id="puertaFondo"></div>
+        <div id="puertaCaja">
+            <img id="puertaImg" src="contrasena.jpg" alt="" draggable="false">
+
+            <div id="campoClave" class="el">
+                <svg class="candado" viewBox="0 0 34 40"><path d="M9 17V11a8 8 0 0 1 16 0v6" fill="none" stroke="#8b6358" stroke-width="4.5" stroke-linecap="round"/><rect x="2" y="16" width="30" height="22" rx="6" fill="#8b6358"/><circle cx="17" cy="26" r="3.2" fill="#fff8ee"/><rect x="15.6" y="27" width="2.8" height="6" rx="1.2" fill="#fff8ee"/></svg>
+                <input id="clave" type="password" placeholder="Contraseña..." autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+                <button id="ojo" type="button" aria-label="Mostrar u ocultar la contraseña">
+                    <svg id="ojoIcono" viewBox="0 0 40 40"><path d="M3 20c4-7 10-11 17-11s13 4 17 11c-4 7-10 11-17 11S7 27 3 20z" fill="none" stroke="#c9a396" stroke-width="3" stroke-linejoin="round"/><circle cx="20" cy="20" r="5.5" fill="#c9a396"/><path id="ojoTacha" d="M6 34L34 6" stroke="#c9a396" stroke-width="3.2" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+
+            <button id="btnEntrar" class="el" type="button">Entrar ♥</button>
+            <div id="puertaMsg" class="el" aria-live="polite"></div>
+            <div id="burbuja" class="el pop"></div>
+        </div>
+
+    </div>
+    <script>
+    (function() {
+        const puerta = document.getElementById('puerta');
+        const caja = document.getElementById('puertaCaja');
+        const campo = document.getElementById('campoClave');
+        const clave = document.getElementById('clave');
+        const ojo = document.getElementById('ojo');
+        const ojoTacha = document.getElementById('ojoTacha');
+        const btn = document.getElementById('btnEntrar');
+        const msg = document.getElementById('puertaMsg');
+        const burbuja = document.getElementById('burbuja');
+        const avionHola = document.getElementById('holaAvion');
+
+        // =====================================================
+        //  AJUSTES de la puerta
+        // =====================================================
+        // Las contraseñas válidas NO se escriben en claro: se guarda su "huella" (hash).
+        // Para cambiarla: abre la página, pulsa F12, en la consola escribe  generarHash('tu clave')  y pega el número aquí.
+        // La clave actual es:  06112026  (da igual si pone espacios o diagonales, por ejemplo 06/11/2026)
+        const HASHES = [1644029301786623];
+        const PISTA = 'Es nuestra fecha especial: día, mes y año ♥';
+        const INTENTOS_ANTES_DE_PAUSA = 5;     // cuántos errores seguidos antes de esperar un ratito
+        const SEGUNDOS_DE_PAUSA = 30;
+        const FRASES = {
+            inicio: '¡Hola, mi amor! 👋 Escribe la contraseña para entrar 💕',
+            foco: 'Es algo muy especial para nosotros… 🥰',
+            error: '¡Uy! Esa no es 🥺 Inténtalo otra vez',
+            casi: '¡Casi! 🤏 ¿Quieres una pista?',
+            pausa: 'Descansemos un ratito… 🌸',
+            exito: '¡Bienvenida, mi amor! 💖'
+        };
+        const R = 992 / 1064;                   // proporción de la imagen (ancho / alto)
+
+        // =====================================================
+        //  La clave: se normaliza (sin mayúsculas, acentos ni espacios) y se convierte en huella
+        // =====================================================
+        function hash(str, seed) {
+            seed = seed || 0;
+            let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+            for (let i = 0, ch; i < str.length; i++) {
+                ch = str.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+        }
+        function normalizar(t) {
+            return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ]/g, '');
+        }
+        window.generarHash = function(t) { const h = hash(normalizar(t)); console.log(h); return h; };
+
+        // =====================================================
+        //  Tamaño: la imagen se ajusta a la pantalla y todo lo demás se mide en "u" (1 u = 1 px de la imagen)
+        // =====================================================
+        function acomodar() {
+            const vw = window.innerWidth, vh = window.innerHeight;
+            let w = Math.min(vh * R, vw);
+            if (vw < vh * 0.8) w = Math.min(vw * 1.25, vh * R);      // en celular se ve un poco más grande (se recortan los lados)
+            const h = w / R;
+            caja.style.width = w + 'px'; caja.style.height = h + 'px';
+            caja.style.left = (vw - w) / 2 + 'px'; caja.style.top = (vh - h) / 2 + 'px';
+            caja.style.setProperty('--u', (w / 992) + 'px');
+            // la avioneta que saluda: su tamaño depende de la pantalla
+            const pw = Math.max(110, Math.min(vw * 0.2, 210)), ph = pw * 479 / 650;
+            const cw = Math.max(130, pw * 1.05), ch = Math.max(30, ph * 0.3), cuerda = Math.max(26, pw * 0.2);
+            const ty = ph * 0.653;
+            [avionHola].forEach(function(av) {
+            const bob = av.firstElementChild;
+            bob.style.width = (cw + cuerda + pw) + 'px'; bob.style.height = ph + 'px';
+            const cartel = bob.querySelector('.cartel'), cu = bob.querySelector('.cuerda'), img = bob.querySelector('img');
+            cartel.style.width = cw + 'px'; cartel.style.height = ch + 'px'; cartel.style.top = (ty - ch / 2) + 'px';
+            cartel.style.fontSize = ch * 0.62 + 'px';
+            cu.style.left = (cw * 0.9) + 'px'; cu.style.width = (cuerda + pw * 0.03 + cw * 0.1) + 'px'; cu.style.top = ty + 'px';
+            img.style.left = (cw + cuerda) + 'px'; img.style.top = 0; img.style.width = pw + 'px';
+            });
+        }
+        avionHola.querySelector('.cartel').textContent = '¡Hola, amor! ♥';      // ← lo que dice la avioneta al entrar
+        avionHola.addEventListener('animationend', function() { avionHola.remove(); });   // pasa una vez y desaparece
+        window.addEventListener('puerta-abierta', function() { setTimeout(function() { avionHola.classList.add('vuela'); }, 900); });
+        window.addEventListener('resize', acomodar);
+        acomodar();
+
+        // =====================================================
+        //  El globo de Snoopy
+        // =====================================================
+        function decir(texto) {
+            burbuja.textContent = texto;
+            burbuja.classList.remove('pop'); void burbuja.offsetWidth; burbuja.classList.add('pop');
+        }
+        function avisar(html, esHtml) {
+            if (esHtml) msg.innerHTML = html; else msg.textContent = html;
+            msg.classList.toggle('visible', !!html);
+        }
+        decir(FRASES.inicio);
+
+        // =====================================================
+        //  Comprobar la clave
+        // =====================================================
+        let errores = 0, bloqueado = false, abierta = false;
+
+        function mostrarPista() { avisar('Pista: ' + PISTA); decir('💡 ' + PISTA); }
+
+        function fallar() {
+            errores++;
+            campo.classList.remove('error'); void campo.offsetWidth; campo.classList.add('error');
+            clave.select();
+            if (errores >= INTENTOS_ANTES_DE_PAUSA) { pausar(); return; }
+            if (errores >= 2) {
+                avisar('Contraseña incorrecta · <button type="button" id="verPista">ver pista</button>', true);
+                document.getElementById('verPista').addEventListener('click', mostrarPista);
+                decir(FRASES.casi);
+            } else {
+                avisar('Contraseña incorrecta');
+                decir(FRASES.error);
+            }
+        }
+
+        function pausar() {
+            bloqueado = true; clave.disabled = true; btn.disabled = true;
+            let s = SEGUNDOS_DE_PAUSA;
+            decir(FRASES.pausa);
+            const t = setInterval(function() {
+                avisar('Demasiados intentos. Espera ' + s + ' s…');
+                if (s-- <= 0) {
+                    clearInterval(t); bloqueado = false; errores = 0;
+                    clave.disabled = false; btn.disabled = false; avisar(''); decir(FRASES.inicio); clave.focus();
+                }
+            }, 1000);
+            avisar('Demasiados intentos. Espera ' + s-- + ' s…');
+        }
+
+        function corazonesDeFiesta() {                 // una lluvia de corazones desde el candado del moño
+            const ox = caja.offsetWidth * 0.5, oy = caja.offsetHeight * 0.343;
+            const colores = ['#ff5c86', '#ff8fb1', '#ffb3c6', '#ffd166', '#c77dff', '#ff6b6b'];
+            for (let i = 0; i < 34; i++) {
+                const e = document.createElement('div');
+                e.className = 'corazonSalta'; e.textContent = '♥';
+                e.style.left = ox + 'px'; e.style.top = oy + 'px';
+                e.style.color = colores[i % colores.length];
+                e.style.fontSize = (16 + Math.random() * 26) + 'px';
+                caja.appendChild(e);
+                const ang = Math.random() * Math.PI * 2, d = 90 + Math.random() * 260;
+                e.animate([
+                    { transform: 'translate(-50%, -50%) scale(0.3)', opacity: 1 },
+                    { transform: 'translate(calc(-50% + ' + Math.cos(ang) * d + 'px), calc(-50% + ' + (Math.sin(ang) * d - 60) + 'px)) scale(1.1)', opacity: 1, offset: 0.6 },
+                    { transform: 'translate(calc(-50% + ' + Math.cos(ang) * d * 1.1 + 'px), calc(-50% + ' + (Math.sin(ang) * d + 40) + 'px)) scale(0.8)', opacity: 0 }
+                ], { duration: 1400 + Math.random() * 900, easing: 'ease-out', fill: 'forwards' }).onfinish = function() { e.remove(); };
+            }
+        }
+
+        function abrir() {
+            abierta = true;
+            clave.disabled = true; btn.disabled = true;
+            avisar('¡Correcta! 💖');
+            decir(FRASES.exito);
+            corazonesDeFiesta();
+            setTimeout(function() {
+                window.dispatchEvent(new Event('puerta-abierta'));      // despierta la bienvenida
+                puerta.classList.add('saliendo');
+            }, 1300);
+            setTimeout(function() { puerta.remove(); }, 2700);
+        }
+
+        function comprobar() {
+            if (bloqueado || abierta) return;
+            const t = normalizar(clave.value);
+            if (!t) { campo.classList.remove('error'); void campo.offsetWidth; campo.classList.add('error'); clave.focus(); return; }
+            if (HASHES.indexOf(hash(t)) !== -1) abrir(); else fallar();
+        }
+
+        btn.addEventListener('click', comprobar);
+        clave.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter') comprobar();
+            if (ev.getModifierState && ev.getModifierState('CapsLock') && !msg.classList.contains('visible')) avisar('Ojo: tienes el Bloq Mayús activado');
+        });
+        clave.addEventListener('input', function() { if (msg.textContent.indexOf('Bloq') !== -1) avisar(''); });
+        clave.addEventListener('focus', function() { if (errores === 0 && !abierta) decir(FRASES.foco); });
+
+        // el ojito: mostrar u ocultar lo que se escribe
+        function pintarOjo() { ojoTacha.style.display = clave.type === 'password' ? 'block' : 'none'; }
+        ojo.addEventListener('click', function() { clave.type = clave.type === 'password' ? 'text' : 'password'; pintarOjo(); clave.focus(); });
+        pintarOjo();
+
+        setTimeout(function() { try { clave.focus({ preventScroll: true }); } catch (e) {} }, 900);
+    })();
+    </script>
+
+    <button id="btnMusica" type="button" aria-label="Activar o silenciar la música">🔊</button>
+    <script>
+    // =====================================================
+    //  MÚSICA: una canción por escena, con fundido suave entre ellas
+    // =====================================================
+    (function() {
+        // ---------- AJUSTES ----------
+        // Pon tus canciones dentro de una carpeta llamada "musica", junto a este archivo.
+        // archivo: el nombre del mp3 · volumen: de 0 a 1 · inicio: segundo desde el que empieza (opcional)
+        // ("A Thousand Years" trae 5.6 segundos de silencio al principio: por eso empieza en el segundo 5.6)
+        // Si dos escenas usan el MISMO archivo, la canción sigue sonando sin reiniciarse.
+        // Deja  null  en una escena para que ahí no suene nada (se apaga con fundido).
+        const MUSICA = {
+            puerta:     { archivo: 'musica/alegre.mp3',   volumen: 0.45 },   // 1ª canción (alegre, "Here Comes the Sun"): la contraseña
+            bienvenida: { archivo: 'musica/alegre.mp3',   volumen: 0.5 },    //   ...el campo con el corazón escondido
+            juego:      { archivo: 'musica/alegre.mp3',   volumen: 0.5 },    //   ...y el arco y la flecha (sigue sin cortarse)
+            teamo:      { archivo: 'musica/thousand_years.mp3', volumen: 0.55, inicio: 5.6 },   // 2ª canción ("A Thousand Years"): entra con el flechazo y el "Te amo"
+            arbol:      { archivo: 'musica/thousand_years.mp3', volumen: 0.55, inicio: 5.6 },   //   ...el árbol y las tarjetas
+            final:      { archivo: 'musica/thousand_years.mp3', volumen: 0.3, inicio: 5.6 }     //   ...el mensaje (más bajito para poder leer). Para una 3ª canción: cambia este archivo
+        };
+        const FUNDIDO = 2;              // segundos que tarda el cambio de canción
+
+        const boton = document.getElementById('btnMusica');
+        const precargadas = {};
+        let desbloqueado = false, escenaPendiente = 'puerta', escenaActual = '', actual = null, silenciado = false;
+        try { silenciado = localStorage.getItem('musicaSilenciada') === '1'; } catch (e) {}
+
+        function pintarBoton() { boton.textContent = silenciado ? '🔇' : '🔊'; }
+
+        // Sube o baja el volumen poco a poco (y al llegar a 0 libera la canción vieja)
+        function fundir(a, hasta, quitar, seg) {
+            if (a._t) clearInterval(a._t);
+            const paso = 50, desde = a.volume, n = Math.max(1, (seg || FUNDIDO) * 1000 / paso);
+            let i = 0;
+            a._t = setInterval(function() {
+                i++;
+                const u = i / n;       // cruce "de potencia igual": el que entra sube y el que sale baja sin dejar un hueco
+                a.volume = Math.min(1, Math.max(0, hasta > desde ? desde + (hasta - desde) * Math.sin(u * Math.PI / 2) : hasta + (desde - hasta) * Math.cos(u * Math.PI / 2)));
+                if (i >= n) { clearInterval(a._t); if (quitar) { a.pause(); a.removeAttribute('src'); a.load(); } }
+            }, paso);
+        }
+
+        function aplicar(nombre) {
+            const cfg = MUSICA[nombre];
+            escenaActual = nombre;
+            if (!cfg || !cfg.archivo) { if (actual) { fundir(actual, 0, true); actual = null; } return; }
+            if (actual && actual._archivo === cfg.archivo) { fundir(actual, cfg.volumen); return; }   // misma canción: solo ajusta el volumen
+            const a = new Audio();
+            a._archivo = cfg.archivo; a.loop = !cfg.inicio; a.volume = 0; a.muted = silenciado; a.preload = 'auto';
+            a.src = cfg.archivo;
+            if (cfg.inicio) a.addEventListener('ended', function() { a.currentTime = cfg.inicio; const q = a.play(); if (q && q.catch) q.catch(function() {}); });   // al repetirse, se salta el silencio del principio
+            if (cfg.inicio) a.addEventListener('loadedmetadata', function() { try { a.currentTime = cfg.inicio; } catch (e) {} }, { once: true });
+            a.addEventListener('error', function() { if (actual === a) actual = null; });     // si falta el archivo, simplemente no suena
+            const p = a.play(); if (p && p.catch) p.catch(function() {});
+            fundir(a, cfg.volumen);
+            if (actual) fundir(actual, 0, true);
+            actual = a;
+        }
+
+        window.musica = {
+            apagar: function(seg) { if (actual) fundir(actual, 0, false, seg); },     // baja el volumen a cero poco a poco
+            escena: function(nombre) {
+                escenaPendiente = nombre;
+                if (desbloqueado && nombre !== escenaActual) aplicar(nombre);
+            },
+            _estado: function() { return { escena: escenaActual, archivo: actual && actual._archivo, vol: actual && +actual.volume.toFixed(2), silenciado: silenciado, sonando: !!actual && !actual.paused }; }
+        };
+
+        // Los navegadores no dejan sonar nada hasta que la persona toca algo: se empieza con el primer toque o tecla
+        function desbloquear() {
+            if (desbloqueado) return;
+            desbloqueado = true;
+            ['pointerdown', 'keydown', 'touchstart'].forEach(function(n) { window.removeEventListener(n, desbloquear, true); });
+            aplicar(escenaPendiente);
+            Object.keys(MUSICA).forEach(function(k) {        // precarga las otras canciones para que el cambio sea instantáneo
+                const c = MUSICA[k]; if (!c || !c.archivo || precargadas[c.archivo]) return;
+                precargadas[c.archivo] = 1; const x = new Audio(); x.preload = 'auto'; x.src = c.archivo;
+            });
+        }
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function(n) { window.addEventListener(n, desbloquear, true); });
+
+        window.addEventListener('puerta-abierta', function() { window.musica.escena('bienvenida'); });
+
+        boton.addEventListener('click', function() {
+            silenciado = !silenciado;
+            if (actual) actual.muted = silenciado;
+            try { localStorage.setItem('musicaSilenciada', silenciado ? '1' : '0'); } catch (e) {}
+            pintarBoton();
+        });
+        pintarBoton();
+        boton.classList.add('visible');
+
+        // al cambiar de pestaña, se pausa; al volver, sigue
+        document.addEventListener('visibilitychange', function() {
+            if (!actual) return;
+            if (document.hidden) actual.pause(); else { const p = actual.play(); if (p && p.catch) p.catch(function() {}); }
+        });
+    })();
+    </script>
+</body>
+</html>
