@@ -3509,18 +3509,22 @@
             _estado: function() { return { escena: escenaActual, archivo: actual && actual._archivo, vol: actual && +actual.volume.toFixed(2), silenciado: silenciado, sonando: !!actual && !actual.paused }; }
         };
 
-        // Los navegadores no dejan sonar nada hasta que la persona toca algo: se empieza con el primer toque o tecla
+        // Los navegadores no dejan sonar nada hasta que la persona toca algo.
+        // En el celular, el "permiso" llega cuando se SUELTA el dedo (no al apoyarlo), así que se escucha 'pointerup', 'touchend' y 'click'.
+        // Y si la canción no pudo empezar, se vuelve a intentar en cada toque hasta que suene.
         function desbloquear() {
-            if (desbloqueado) return;
-            desbloqueado = true;
-            ['pointerdown', 'keydown', 'touchstart'].forEach(function(n) { window.removeEventListener(n, desbloquear, true); });
-            aplicar(escenaPendiente);
-            Object.keys(MUSICA).forEach(function(k) {        // precarga las otras canciones para que el cambio sea instantáneo
-                const c = MUSICA[k]; if (!c || !c.archivo || precargadas[c.archivo]) return;
-                precargadas[c.archivo] = 1; const x = new Audio(); x.preload = 'auto'; x.src = c.archivo;
-            });
+            if (!desbloqueado) {
+                desbloqueado = true;
+                aplicar(escenaPendiente);
+                Object.keys(MUSICA).forEach(function(k) {        // precarga las otras canciones para que el cambio sea instantáneo
+                    const c = MUSICA[k]; if (!c || !c.archivo || precargadas[c.archivo]) return;
+                    precargadas[c.archivo] = 1; const x = new Audio(); x.preload = 'auto'; x.src = c.archivo;
+                });
+            } else if (actual && actual.paused && !document.hidden) {
+                const q = actual.play(); if (q && q.catch) q.catch(function() {});
+            }
         }
-        ['pointerdown', 'keydown', 'touchstart'].forEach(function(n) { window.addEventListener(n, desbloquear, true); });
+        ['pointerup', 'touchend', 'click', 'keydown'].forEach(function(n) { window.addEventListener(n, desbloquear, true); });
 
         window.addEventListener('puerta-abierta', function() { window.musica.escena('bienvenida'); });
 
